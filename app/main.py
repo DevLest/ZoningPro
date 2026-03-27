@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import json
 from contextlib import asynccontextmanager
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.config import EXPORTS_DIR, PROJECT_ROOT
@@ -17,7 +19,7 @@ from app.fees import TEMPLATE_REGISTRY, compute_fees, list_categories, suggest_t
 from app.fees.registry import get_template
 from app.models import LCApplication
 from app.pdf_slip import build_assessment_pdf
-from app.resolved_fees import display_fees_for_application
+from app.resolved_fees import DisplayFees, display_fees_for_application
 from app.ui_context import merge_shell, shell_for_application
 
 PROJECT_TYPE_DISPLAY = {
@@ -29,7 +31,27 @@ PROJECT_TYPE_DISPLAY = {
     "special_use": "SPECIAL USE",
 }
 
+LC_STATUS_OPTIONS: list[tuple[str, str]] = [
+    ("", "— Select status —"),
+    ("Pending", "Pending"),
+    ("Under review", "Under review"),
+    ("Approved", "Approved"),
+    ("Granted", "Granted"),
+    ("Denied", "Denied"),
+    ("Cancelled", "Cancelled"),
+]
+LC_STATUS_KNOWN = {v for v, _ in LC_STATUS_OPTIONS if v}
+
 templates = Jinja2Templates(directory=str(PROJECT_ROOT / "app" / "templates"))
+
+
+class AssessmentSyncIn(BaseModel):
+    lc_status: str | None = None
+    date_granted: str | None = None
+    optional_units: str | None = None
+    surcharge_amount: str | None = None
+    waive_zoning_cert: bool = False
+    lc_fee_amount: str | None = None
 
 
 @asynccontextmanager
@@ -63,6 +85,65 @@ def _parse_surcharge_override(raw: str, computed_surcharge: float) -> float | No
     if abs(v - computed_surcharge) < 0.005:
         return None
     return v
+
+
+def _parse_lc_fee_override(raw: str | None, computed_lc: float) -> float | None:
+    """Empty or same-as-computed clears manual override (use formula)."""
+    s = (raw or "").strip()
+    if not s:
+        return None
+    try:
+        v = float(s)
+    except ValueError:
+        return None
+    if abs(v - computed_lc) < 0.005:
+        return None
+    return v
+
+
+def _display_fees_dict(d: DisplayFees) -> dict[str, Any]:
+    return {
+        "lc_fee": d.lc_fee,
+        "computed_lc_fee": d.computed_lc_fee,
+        "surcharge": d.surcharge,
+        "zoning_cert": d.zoning_cert,
+        "total": d.total,
+        "computed_surcharge": d.computed_surcharge,
+        "computed_zoning_cert": d.computed_zoning_cert,
+        "surcharge_overridden": d.surcharge_overridden,
+        "lc_fee_overridden": d.lc_fee_overridden,
+        "zoning_waived": d.zoning_waived,
+    }
+
+
+def _apply_assessment_inputs(
+    row: LCApplication,
+    *,
+    lc_status: str | None,
+    date_granted: str | None,
+    optional_units: str | None,
+    surcharge_amount: str | None,
+    waive_zoning_cert: bool,
+    lc_fee_amount: str | None,
+    db: Session,
+) -> DisplayFees:
+    row.lc_status = (lc_status or "").strip() or None
+    row.date_granted = _parse_date(date_granted)
+    ou = (optional_units or "").strip()
+    row.optional_units = float(ou) if ou else None
+    base = compute_fees(
+        row.template_id or "",
+        float(row.project_cost or 0),
+        lot_area_sqm=row.lot_area_sqm,
+        optional_units=row.optional_units,
+    )
+    row.surcharge_override = _parse_surcharge_override(surcharge_amount or "", base.surcharge)
+    row.lc_fee_override = _parse_lc_fee_override(lc_fee_amount, base.lc_fee)
+    row.waive_zoning_cert = waive_zoning_cert
+    db.commit()
+    db.refresh(row)
+    _base, display = display_fees_for_application(row)
+    return display
 
 
 @app.get("/api/suggest-template")
@@ -207,9 +288,32 @@ def assessment_get(request: Request, app_id: int, db: Session = Depends(get_db))
             "display": display,
             "meta": meta,
             "project_type_label": ptype,
+            "lc_status_options": LC_STATUS_OPTIONS,
+            "lc_status_known": LC_STATUS_KNOWN,
+            "fee_display_json": json.dumps(_display_fees_dict(display)),
         }
     )
     return templates.TemplateResponse(request, "assessment.html", ctx)
+
+
+@app.post("/api/applications/{app_id}/assessment-sync")
+def assessment_sync(app_id: int, body: AssessmentSyncIn, db: Session = Depends(get_db)):
+    row = db.get(LCApplication, app_id)
+    if not row:
+        raise HTTPException(404)
+    if not row.template_id or row.project_cost is None:
+        raise HTTPException(400)
+    display = _apply_assessment_inputs(
+        row,
+        lc_status=body.lc_status,
+        date_granted=body.date_granted,
+        optional_units=body.optional_units,
+        surcharge_amount=body.surcharge_amount,
+        waive_zoning_cert=body.waive_zoning_cert,
+        lc_fee_amount=body.lc_fee_amount,
+        db=db,
+    )
+    return {"ok": True, "display": _display_fees_dict(display)}
 
 
 @app.post("/applications/{app_id}/assessment")
@@ -218,6 +322,9 @@ def assessment_post(
     optional_units: str = Form(""),
     surcharge_amount: str = Form(""),
     waive_zoning_cert: str | None = Form(None),
+    lc_status: str = Form(""),
+    date_granted: str = Form(""),
+    lc_fee_amount: str = Form(""),
     db: Session = Depends(get_db),
 ):
     row = db.get(LCApplication, app_id)
@@ -225,17 +332,16 @@ def assessment_post(
         raise HTTPException(404)
     if not row.template_id or row.project_cost is None:
         raise HTTPException(400)
-    ou = optional_units.strip()
-    row.optional_units = float(ou) if ou else None
-    base = compute_fees(
-        row.template_id,
-        row.project_cost,
-        lot_area_sqm=row.lot_area_sqm,
-        optional_units=row.optional_units,
+    _apply_assessment_inputs(
+        row,
+        lc_status=lc_status,
+        date_granted=date_granted,
+        optional_units=optional_units,
+        surcharge_amount=surcharge_amount,
+        waive_zoning_cert=waive_zoning_cert in ("1", "on", "true", "yes"),
+        lc_fee_amount=lc_fee_amount,
+        db=db,
     )
-    row.surcharge_override = _parse_surcharge_override(surcharge_amount, base.surcharge)
-    row.waive_zoning_cert = waive_zoning_cert in ("1", "on", "true", "yes")
-    db.commit()
     return RedirectResponse(url=f"/applications/{app_id}/assessment", status_code=303)
 
 
