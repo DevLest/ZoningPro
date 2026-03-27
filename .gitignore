@@ -1,0 +1,10 @@
+data/
+exports/
+.python/
+py_embed.zip
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.db-journal

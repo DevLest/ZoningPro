@@ -1,0 +1,69 @@
+{# Project sidebar — expects: sidebar_active, project_title, project_subtitle, app_id, show_finalize_cta #}
+{% set classify_href = "/applications/" ~ app_id ~ "/classify" if app_id else "#" %}
+{% set assessment_href = "/applications/" ~ app_id ~ "/assessment" if app_id else "#" %}
+<aside
+  class="sticky top-16 hidden h-[calc(100vh-64px)] w-64 border-r border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950 lg:flex lg:flex-col lg:py-6"
+>
+  <div class="mb-8 px-6">
+    <h3 class="text-sm font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-400">{{ project_title }}</h3>
+    <p class="text-xs text-slate-500 dark:text-slate-400">{{ project_subtitle }}</p>
+  </div>
+  <nav class="flex flex-1 flex-col gap-1">
+    <a
+      href="/"
+      class="mx-2 flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-semibold transition-transform duration-200 hover:translate-x-1 {% if sidebar_active == 'overview' %}bg-teal-50 text-teal-800 dark:bg-teal-900/30 dark:text-teal-200{% else %}text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-900{% endif %}"
+    >
+      <span class="material-symbols-outlined">dashboard</span>
+      Overview
+    </a>
+    <a
+      href="{{ classify_href }}"
+      class="mx-2 flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-semibold transition-transform duration-200 hover:translate-x-1 {% if sidebar_active == 'site_analysis' %}bg-teal-50 text-teal-800 dark:bg-teal-900/30 dark:text-teal-200{% else %}text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-900{% endif %}"
+    >
+      <span class="material-symbols-outlined">architecture</span>
+      Site Analysis
+    </a>
+    <a
+      href="{{ assessment_href }}"
+      class="mx-2 flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-semibold transition-transform duration-200 hover:translate-x-1 {% if sidebar_active == 'fee_calculator' %}bg-teal-50 text-teal-800 dark:bg-teal-900/30 dark:text-teal-200{% else %}text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-900{% endif %}"
+    >
+      <span class="material-symbols-outlined">calculate</span>
+      Fee Calculator
+    </a>
+    <a
+      href="#"
+      class="mx-2 flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-semibold text-slate-500 transition-transform duration-200 hover:translate-x-1 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-900"
+    >
+      <span class="material-symbols-outlined">gavel</span>
+      Zoning Laws
+    </a>
+  </nav>
+  {% if show_finalize_cta and app_id %}
+  <div class="mb-4 px-4">
+    <form method="post" action="/applications/{{ app_id }}/finalize">
+      <button
+        type="submit"
+        class="w-full rounded-xl bg-primary py-3 text-sm font-bold text-on-primary shadow-md transition-all hover:opacity-90"
+      >
+        Finalize Estimate
+      </button>
+    </form>
+  </div>
+  {% endif %}
+  <div class="flex flex-col gap-1 border-t border-slate-200 pt-4 dark:border-slate-800">
+    <a
+      href="#"
+      class="mx-2 flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-900"
+    >
+      <span class="material-symbols-outlined">settings</span>
+      Settings
+    </a>
+    <a
+      href="#"
+      class="mx-2 flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-semibold text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-900"
+    >
+      <span class="material-symbols-outlined">help</span>
+      Support
+    </a>
+  </div>
+</aside>

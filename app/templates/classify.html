@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Classify — {{ app.lc_ctrl_no }} — ZoningPro{% endblock %}
+{% block content %}
+<header class="mb-10">
+  <div class="mb-2 flex items-center gap-2 text-sm font-semibold text-primary">
+    <span class="material-symbols-outlined text-sm">arrow_back</span>
+    <a href="/" class="hover:underline">Dashboard</a>
+    <span class="text-on-surface-variant">/</span>
+    <span class="tracking-tight text-on-surface">{{ app.lc_ctrl_no }}</span>
+  </div>
+  <h1 class="mb-4 text-4xl font-extrabold tracking-tighter text-on-surface">Project type &amp; estimation</h1>
+  <p class="max-w-2xl leading-relaxed text-on-surface-variant">
+    Pick category and project cost. The <strong>assessment template</strong> updates automatically from the budget (you can still change it in the dropdown).
+  </p>
+</header>
+
+<form
+  method="post"
+  action="/applications/{{ app.id }}/classify"
+  class="space-y-8 rounded-xl border border-outline-variant/10 bg-surface-container-lowest p-8 shadow-[0_12px_40px_rgba(0,79,69,0.06)]"
+>
+  <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+    <div class="space-y-2">
+      <label class="block text-sm font-semibold tracking-wide text-on-surface-variant">Category *</label>
+      <select
+        name="category"
+        id="category"
+        required
+        class="w-full appearance-none rounded-lg border-none bg-surface-container-highest px-4 py-3 font-medium text-on-surface focus:ring-2 focus:ring-primary"
+      >
+        {% for cid, clabel in categories %}
+        <option value="{{ cid }}" {% if app.category == cid %}selected{% endif %}>{{ clabel }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="space-y-2">
+      <label class="block text-sm font-semibold tracking-wide text-on-surface-variant">Project cost (₱) *</label>
+      <div class="relative">
+        <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400">₱</span>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          name="project_cost"
+          id="project-cost"
+          value="{{ app.project_cost or '' }}"
+          required
+          class="w-full rounded-lg border-none bg-surface-container-highest py-3 pl-10 pr-4 font-bold text-on-surface focus:ring-2 focus:ring-primary"
+        />
+      </div>
+    </div>
+  </div>
+  <div class="space-y-2">
+    <label class="block text-sm font-semibold tracking-wide text-on-surface-variant">Lot area (sq.m)</label>
+    <input
+      type="number"
+      step="0.01"
+      min="0"
+      name="lot_area_sqm"
+      value="{{ app.lot_area_sqm or '' }}"
+      class="w-full rounded-lg border-none bg-surface-container-highest px-4 py-3 font-medium text-on-surface focus:ring-2 focus:ring-primary"
+      placeholder="Required for some institutional tiers"
+    />
+    <p class="text-xs text-on-surface-variant">Used when the template bases zoning certification on lot area (e.g. Institutional ₱2M+).</p>
+  </div>
+  <div class="space-y-2">
+    <label class="block text-sm font-semibold tracking-wide text-on-surface-variant">Assessment template *</label>
+    <select
+      name="template_id"
+      id="template-select"
+      required
+      class="w-full appearance-none rounded-lg border-none bg-surface-container-highest px-4 py-3 font-medium text-on-surface focus:ring-2 focus:ring-primary"
+    >
+      {% for cat, items in templates_grouped.items() %}
+      <optgroup label="{{ cat_labels.get(cat, cat) }}">
+        {% for t in items %}
+        <option value="{{ t.id }}" {% if app.template_id == t.id or (not app.template_id and suggested == t.id) %}selected{% endif %}>{{ t.label }} — {{ t.description }}</option>
+        {% endfor %}
+      </optgroup>
+      {% endfor %}
+    </select>
+    {% if suggested %}
+    <p class="text-xs text-primary">Auto-match for this cost: <strong>{{ suggested }}</strong> — adjust the dropdown if needed.</p>
+    {% endif %}
+  </div>
+  <div class="flex flex-wrap justify-end gap-3 border-t border-surface-container pt-6">
+    <a href="/" class="rounded-xl px-6 py-3 text-sm font-bold text-on-surface-variant hover:bg-surface-container">Back</a>
+    <button type="submit" class="bg-primary-gradient rounded-xl px-8 py-3 text-sm font-black text-white shadow-xl transition-all hover:scale-[1.02] active:scale-95">
+      Continue to assessment
+    </button>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var catEl = document.getElementById("category");
+  var costEl = document.getElementById("project-cost");
+  var tplEl = document.getElementById("template-select");
+  if (!catEl || !costEl || !tplEl) return;
+  function syncTemplate() {
+    var cat = catEl.value;
+    var cost = parseFloat(costEl.value);
+    if (!cat || isNaN(cost) || cost < 0) return;
+    fetch("/api/suggest-template?category=" + encodeURIComponent(cat) + "&project_cost=" + cost)
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j.template_id) return;
+        var opt = tplEl.querySelector('option[value="' + j.template_id + '"]');
+        if (opt) tplEl.value = j.template_id;
+      })
+      .catch(function () {});
+  }
+  catEl.addEventListener("change", syncTemplate);
+  costEl.addEventListener("input", syncTemplate);
+  costEl.addEventListener("change", syncTemplate);
+})();
+</script>
+{% endblock %}

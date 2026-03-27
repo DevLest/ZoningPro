@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  {% include "components/head_tailwind.html" %}
+  <title>{% block title %}ZoningPro{% endblock %}</title>
+  {% block head_extra %}{% endblock %}
+  <link rel="stylesheet" href="/static/css/app.css"/>
+</head>
+<body class="min-h-screen bg-surface text-on-surface antialiased">
+  {% include "components/navbar.html" %}
+  <div class="flex min-h-screen pt-16">
+    {% include "components/sidebar.html" %}
+    <main class="{% block main_class %}flex-1 overflow-y-auto bg-surface p-6 pb-24 md:p-8 md:pb-8{% endblock %}">
+      <div class="{% block content_wrapper_class %}mx-auto max-w-6xl{% endblock %}">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+  {% include "components/mobile_bottom_nav.html" %}
+  {% block scripts %}{% endblock %}
+</body>
+</html>

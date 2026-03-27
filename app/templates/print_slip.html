@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Print — {{ app.lc_ctrl_no }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print {
+      .no-print { display: none !important; }
+      body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .slip-sheet { break-inside: avoid; }
+      body.print-copy-owner .slip-file-copy { display: none !important; }
+      body.print-copy-file .slip-owner-copy { display: none !important; }
+    }
+    body.print-copy-owner .slip-file-copy { display: none; }
+    body.print-copy-file .slip-owner-copy { display: none; }
+    .slip-border { border: 2px solid #1e293b; }
+    .field-line { border-bottom: 1px solid #334155; min-height: 1.25rem; }
+    .total-row { border-top: 3px double #1e293b; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 print:bg-white print-copy-{{ print_copy }}">
+  <div class="no-print mx-auto max-w-6xl px-4 py-4">
+    <div class="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <span class="text-sm font-semibold text-slate-800">Print which slip?</span>
+      <label class="inline-flex cursor-pointer items-center gap-1.5 text-sm text-slate-700">
+        <input type="radio" name="print_which" value="both" class="text-emerald-700" {% if print_copy == 'both' %}checked{% endif %}/>
+        Both (side by side)
+      </label>
+      <label class="inline-flex cursor-pointer items-center gap-1.5 text-sm text-slate-700">
+        <input type="radio" name="print_which" value="owner" class="text-emerald-700" {% if print_copy == 'owner' %}checked{% endif %}/>
+        Owner's copy only
+      </label>
+      <label class="inline-flex cursor-pointer items-center gap-1.5 text-sm text-slate-700">
+        <input type="radio" name="print_which" value="file" class="text-emerald-700" {% if print_copy == 'file' %}checked{% endif %}/>
+        File copy only
+      </label>
+    </div>
+    <button type="button" onclick="window.print()" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Print or Save as PDF</button>
+    <a href="/applications/{{ app.id }}/assessment" class="ml-3 text-sm text-emerald-700 hover:underline">Back to assessment</a>
+  </div>
+
+  <div class="mx-auto max-w-6xl px-3 pb-10 print:max-w-none print:px-4">
+    <div class="grid grid-cols-1 gap-6 print:grid-cols-2 print:gap-4 lg:grid-cols-2">
+      {% for label in ["OWNER'S COPY", "FILE COPY"] %}
+      <article class="slip-sheet slip-border bg-white p-4 font-serif text-[11px] leading-snug shadow-sm print:shadow-none {% if loop.first %}slip-owner-copy{% else %}slip-file-copy{% endif %}">
+        <header class="flex gap-3 border-b border-slate-300 pb-3">
+          <img src="/static/img/seal-binalbagan.png" alt="Seal" width="72" height="72" class="h-[72px] w-[72px] shrink-0 object-contain print:h-16 print:w-16"/>
+          <div class="flex-1 text-center">
+            <p class="text-[10px] leading-tight">Republic of the Philippines</p>
+            <p class="text-[11px] font-semibold leading-tight">Municipality of Binalbagan</p>
+            <p class="mt-0.5 text-[10px] font-bold uppercase tracking-wide leading-tight">Municipal Planning &amp; Development Office</p>
+            <p class="mt-2 text-[9px] font-semibold uppercase tracking-widest text-slate-600">{{ label }}</p>
+          </div>
+        </header>
+
+        <div class="mt-3 flex justify-between gap-2 border border-slate-400 px-2 py-1 text-[10px]">
+          <span><span class="font-semibold">Date:</span> {{ app_date }}</span>
+          <span><span class="font-semibold">CTRL. No.:</span> {{ app.lc_ctrl_no }}</span>
+        </div>
+
+        <p class="mt-3 text-center text-[10px] font-bold uppercase tracking-wide">Application for Locational Clearance</p>
+        <p class="mt-1 text-center text-[11px] font-bold">Computation Slip</p>
+
+        <dl class="mt-4 space-y-2">
+          <div class="flex gap-2">
+            <dt class="w-20 shrink-0 font-semibold">Applicant:</dt>
+            <dd class="field-line flex-1 px-1">{{ app.applicant_name }}</dd>
+          </div>
+          <div class="flex gap-2">
+            <dt class="w-20 shrink-0 font-semibold">Address:</dt>
+            <dd class="field-line flex-1 px-1">{{ app.address }}</dd>
+          </div>
+          <div class="flex gap-2">
+            <dt class="w-20 shrink-0 font-semibold">Project:</dt>
+            <dd class="field-line flex-1 px-1">{{ app.project_name or '—' }}</dd>
+          </div>
+          <div class="flex gap-2">
+            <dt class="w-20 shrink-0 font-semibold">Location:</dt>
+            <dd class="field-line flex-1 px-1">{{ app.project_location or '—' }}</dd>
+          </div>
+          <div class="flex gap-2">
+            <dt class="w-20 shrink-0 font-semibold">Lot Area:</dt>
+            <dd class="field-line flex-1 px-1">{{ lot_display }} <span class="text-slate-600">SQ. Meters</span></dd>
+          </div>
+          <div class="pt-1 text-center">
+            <p class="text-[10px] font-semibold">Project Type:</p>
+            <p class="mt-0.5 text-[12px] font-bold uppercase tracking-wide">{{ project_type_label }}</p>
+          </div>
+          <div class="flex flex-wrap items-baseline gap-2 pt-1">
+            <span class="font-semibold">Project Cost:</span>
+            <span class="text-[12px] font-bold">P</span>
+            <span class="field-line min-w-[8rem] flex-1 px-1 text-[12px] font-bold">{{ "%.2f"|format(app.project_cost) }}</span>
+          </div>
+        </dl>
+
+        <div class="mt-4">
+          <p class="text-[11px] font-bold">ASSESSMENT</p>
+          <p class="mt-1 text-[10px] font-bold">FEES:</p>
+          <table class="mt-1 w-full border-collapse border border-slate-600 text-[10px]">
+            <tbody>
+              <tr>
+                <td class="border border-slate-500 px-2 py-1">LC Fee</td>
+                <td class="border border-slate-500 px-2 py-1 text-right font-mono">{{ "%.2f"|format(display.lc_fee) }}</td>
+              </tr>
+              <tr>
+                <td class="border border-slate-500 px-2 py-1">Surcharge</td>
+                <td class="border border-slate-500 px-2 py-1 text-right font-mono">{% if display.surcharge %}{{ "%.2f"|format(display.surcharge) }}{% else %}&nbsp;{% endif %}</td>
+              </tr>
+              <tr>
+                <td class="border border-slate-500 px-2 py-1">Zoning Certification</td>
+                <td class="border border-slate-500 px-2 py-1 text-right font-mono">{% if display.zoning_waived %}0.00 <span class="text-slate-600">(waived)</span>{% else %}{{ "%.2f"|format(display.zoning_cert) }}{% endif %}</td>
+              </tr>
+              <tr class="total-row font-bold">
+                <td class="border border-slate-600 px-2 py-1.5">Total Assessment</td>
+                <td class="border border-slate-600 px-2 py-1.5 text-right font-mono">P {{ "%.2f"|format(display.total) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="mt-6 grid grid-cols-2 gap-3 text-[10px]">
+          <div>
+            <p class="font-semibold">Assessed:</p>
+            <div class="mt-6 border-b border-slate-400"></div>
+          </div>
+          <div>
+            <p class="font-semibold">Approved:</p>
+            <div class="mt-2 text-center">
+              <p class="font-semibold leading-tight">PEARL ANGELI P. FUENTES, EnP</p>
+              <p class="text-[9px]">Zoning Administrator</p>
+            </div>
+          </div>
+        </div>
+        <p class="mt-4 text-center text-[9px] text-slate-600">Please pay at the Municipal Treasurer's Office</p>
+        <p class="mt-2 text-[8px] text-slate-400">Template: {{ meta.sheet_name }}</p>
+      </article>
+      {% endfor %}
+    </div>
+
+    {% if app.template_id == 'residential_200k_plus' %}
+    <section class="scratchpad no-print mt-6 slip-border bg-amber-50/80 p-4 font-mono text-[10px]">
+      <p class="mb-2 font-sans text-xs font-bold text-slate-800">Excel worksheet check (columns K, L, M → LC Fee)</p>
+      <p class="mb-2 font-sans text-[10px] text-slate-600">Residential ₱200K+: K17 = project cost − ₱200,000 · K18 = K17 × 1% · K19 = K18 ÷ 10 (one-tenth) · <strong>LC Fee = 720 + K19</strong> (same as 720 + excess × 0.001)</p>
+      <div class="overflow-x-auto">
+        <table class="w-full max-w-xl border-collapse border border-slate-500 bg-white">
+          <thead>
+            <tr class="bg-slate-200 text-left text-[9px] uppercase">
+              <th class="border border-slate-400 px-2 py-1">Col</th>
+              <th class="border border-slate-400 px-2 py-1">Value</th>
+              <th class="border border-slate-400 px-2 py-1">Label (as in Excel)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="border border-slate-300 px-2 py-1">K17</td>
+              <td class="border border-slate-300 px-2 py-1 text-right">{{ "%.2f"|format(fee_computed.breakdown['k17_excess_over_200k']) }}</td>
+              <td class="border border-slate-300 px-2 py-1 text-slate-700">excess of 200K</td>
+            </tr>
+            <tr>
+              <td class="border border-slate-300 px-2 py-1">K18</td>
+              <td class="border border-slate-300 px-2 py-1 text-right">{{ "%.2f"|format(fee_computed.breakdown['k18_one_percent_of_excess']) }}</td>
+              <td class="border border-slate-300 px-2 py-1 text-slate-700">1% of excess</td>
+            </tr>
+            <tr>
+              <td class="border border-slate-300 px-2 py-1">K19</td>
+              <td class="border border-slate-300 px-2 py-1 text-right">{{ "%.2f"|format(fee_computed.breakdown['k19_one_tenth_of_one_percent']) }}</td>
+              <td class="border border-slate-300 px-2 py-1 text-slate-700">1 tenth (of 1%)</td>
+            </tr>
+            <tr class="bg-emerald-50 font-semibold">
+              <td class="border border-slate-300 px-2 py-1">P17 / C18</td>
+              <td class="border border-slate-300 px-2 py-1 text-right">{{ "%.2f"|format(fee_computed.breakdown['p17_lc_fee']) }}</td>
+              <td class="border border-slate-300 px-2 py-1 text-slate-700">LC Fee = 720 + K19</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+  </div>
+  <script>
+(function () {
+  var body = document.body;
+  var radios = document.querySelectorAll('input[name="print_which"]');
+  var base = window.location.pathname;
+
+  function applyMode(mode) {
+    body.classList.remove('print-copy-both', 'print-copy-owner', 'print-copy-file');
+    body.classList.add('print-copy-' + mode);
+    if (window.history && window.history.replaceState) {
+      var q = mode === 'both' ? '' : ('?copy=' + mode);
+      window.history.replaceState(null, '', base + q);
+    }
+  }
+
+  radios.forEach(function (r) {
+    r.addEventListener('change', function () {
+      if (!r.checked) return;
+      var mode = r.value === 'owner' ? 'owner' : (r.value === 'file' ? 'file' : 'both');
+      applyMode(mode);
+    });
+  });
+})();
+  </script>
+</body>
+</html>

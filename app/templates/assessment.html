@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}Assessment — {{ app.lc_ctrl_no }} — ZoningPro{% endblock %}
+{% block content %}
+<header class="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+  <div>
+    <p class="mb-2 text-sm text-on-surface-variant">
+      <a href="/" class="text-primary hover:underline">Dashboard</a> / {{ app.lc_ctrl_no }}
+    </p>
+    <h1 class="mb-2 text-4xl font-extrabold tracking-tight text-on-surface">Fee Assessment &amp; Summary</h1>
+    <p class="text-lg text-on-surface-variant">{{ meta.label }} <span class="text-slate-400">({{ meta.sheet_name }})</span></p>
+  </div>
+  <div class="flex flex-wrap gap-3">
+    <a
+      href="/applications/{{ app.id }}/pdf"
+      class="bg-surface-container-high text-on-secondary-container inline-flex items-center gap-2 rounded-xl px-5 py-2.5 font-semibold transition-colors hover:bg-secondary-container"
+    >
+      <span class="material-symbols-outlined">picture_as_pdf</span>
+      Download PDF
+    </a>
+    <form method="post" action="/applications/{{ app.id }}/finalize" class="inline">
+      <button
+        type="submit"
+        class="bg-primary inline-flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-bold text-on-primary shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95"
+      >
+        <span class="material-symbols-outlined">save</span>
+        Save to record
+      </button>
+    </form>
+  </div>
+</header>
+
+<div class="grid grid-cols-1 gap-8 lg:grid-cols-3">
+  <div class="space-y-8 lg:col-span-2">
+    <section class="rounded-xl border border-outline-variant/10 bg-surface-container-lowest p-8 shadow-sm">
+      <div class="mb-6 flex items-center gap-3">
+        <span class="material-symbols-outlined text-3xl text-primary">payments</span>
+        <h2 class="text-xl font-bold text-on-surface">Cost adjustments</h2>
+      </div>
+      <form method="post" action="/applications/{{ app.id }}/assessment" class="space-y-6">
+        {% if app.template_id == 'apartment_500k' %}
+        <div class="rounded-lg border border-amber-200 bg-amber-50 p-4">
+          <label class="mb-1 block text-sm font-medium text-amber-900">Units (Excel C16) — affects computed surcharge</label>
+          <input
+            type="number"
+            step="0.01"
+            name="optional_units"
+            value="{{ app.optional_units or '' }}"
+            class="w-48 rounded-lg border border-amber-300 px-3 py-2 text-sm"
+          />
+          <p class="mt-2 text-xs text-amber-900/80">Computed surcharge = units × 0.01</p>
+        </div>
+        {% endif %}
+        <div class="grid grid-cols-1 items-end gap-8 md:grid-cols-2">
+          <div class="space-y-2">
+            <label class="block text-sm font-semibold text-on-surface-variant">Surcharge (₱)</label>
+            <div class="relative">
+              <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-outline">
+                <span>₱</span>
+              </div>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                name="surcharge_amount"
+                value="{{ "%.2f"|format(display.surcharge) }}"
+                class="w-full rounded-xl border-none bg-surface-container-highest py-3 pl-10 pr-4 font-mono font-medium text-on-surface focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <p class="text-xs text-on-surface-variant">
+              Computed default: ₱{{ "%.2f"|format(display.computed_surcharge) }}{% if display.surcharge_overridden %} ·
+              <span class="text-amber-800">edited</span>{% endif %}
+            </p>
+          </div>
+          <div
+            class="flex cursor-pointer items-center gap-4 rounded-xl border border-transparent bg-surface-container-low p-4 transition-all hover:border-primary/20"
+          >
+            <input
+              type="checkbox"
+              name="waive_zoning_cert"
+              value="1"
+              id="waive"
+              class="h-6 w-6 rounded border-outline-variant text-primary focus:ring-primary"
+              {% if app.waive_zoning_cert %}checked{% endif %}
+            />
+            <label for="waive" class="cursor-pointer">
+              <span class="block font-bold text-on-surface">Waive zoning certification fee</span>
+              <span class="text-xs text-on-surface-variant">Apply when certification does not apply.</span>
+            </label>
+          </div>
+        </div>
+        {% if display.zoning_waived %}
+        <p class="text-sm text-on-surface-variant">
+          Zoning certification waived — computed would have been ₱{{ "%.2f"|format(display.computed_zoning_cert) }}.
+        </p>
+        {% endif %}
+        <button type="submit" class="rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-on-primary hover:opacity-95">
+          Apply surcharge &amp; waiver
+        </button>
+      </form>
+    </section>
+
+    <section class="overflow-hidden rounded-xl border border-outline-variant/10 bg-surface-container-lowest shadow-sm">
+      <div class="border-b border-surface-container px-8 py-6">
+        <h2 class="text-xl font-bold text-on-surface">Detailed line items</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead>
+            <tr class="bg-surface-container-low">
+              <th class="px-8 py-4 text-sm font-bold uppercase tracking-wider text-on-surface-variant">Description</th>
+              <th class="px-8 py-4 text-sm font-bold uppercase tracking-wider text-on-surface-variant text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-surface-container">
+            <tr class="transition-colors hover:bg-surface-container-low/50">
+              <td class="px-8 py-6">
+                <div class="font-bold text-on-surface">LC Fee</div>
+                <div class="text-xs text-on-surface-variant">Locational clearance assessment</div>
+              </td>
+              <td class="px-8 py-6 text-right font-mono font-bold text-on-surface">₱{{ "%.2f"|format(display.lc_fee) }}</td>
+            </tr>
+            <tr class="transition-colors hover:bg-surface-container-low/50">
+              <td class="px-8 py-6">
+                <div class="font-bold text-on-surface">Surcharge</div>
+                <div class="text-xs text-on-surface-variant">Per template rules</div>
+              </td>
+              <td class="px-8 py-6 text-right font-mono font-bold text-on-surface">₱{{ "%.2f"|format(display.surcharge) }}</td>
+            </tr>
+            <tr class="transition-colors hover:bg-surface-container-low/50">
+              <td class="px-8 py-6">
+                <div class="font-bold text-on-surface">Zoning certification</div>
+                <div class="text-xs text-on-surface-variant">{% if display.zoning_waived %}Waived{% else %}Compliance{% endif %}</div>
+              </td>
+              <td class="px-8 py-6 text-right font-mono font-bold text-on-surface">
+                {% if display.zoning_waived %}₱0.00{% else %}₱{{ "%.2f"|format(display.zoning_cert) }}{% endif %}
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr class="bg-primary text-on-primary">
+              <td class="px-8 py-6 text-lg font-bold">Total estimated fees</td>
+              <td class="px-8 py-6 text-right text-2xl font-black tracking-tighter">₱{{ "%.2f"|format(display.total) }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <aside class="space-y-6">
+    <div class="rounded-xl border border-outline-variant/10 bg-surface-container-low p-6">
+      <h3 class="mb-6 text-sm font-bold uppercase tracking-widest text-on-surface-variant">Applicant snapshot</h3>
+      <div class="space-y-4 text-sm">
+        <div class="flex items-center justify-between border-b border-outline-variant/20 py-2">
+          <span class="text-on-surface-variant">Control #</span>
+          <span class="font-mono font-bold text-on-surface">{{ app.lc_ctrl_no }}</span>
+        </div>
+        <div class="flex items-center justify-between border-b border-outline-variant/20 py-2">
+          <span class="text-on-surface-variant">Applicant</span>
+          <span class="text-right font-bold text-on-surface">{{ app.applicant_name }}</span>
+        </div>
+        <div class="flex items-start justify-between border-b border-outline-variant/20 py-2">
+          <span class="text-on-surface-variant">Address</span>
+          <span class="max-w-[12rem] text-right font-medium text-on-surface">{{ app.address }}</span>
+        </div>
+        <div class="flex items-center justify-between border-b border-outline-variant/20 py-2">
+          <span class="text-on-surface-variant">Project cost</span>
+          <span class="font-mono font-bold text-on-surface">₱{{ "%.2f"|format(app.project_cost) }}</span>
+        </div>
+        <div class="flex items-center justify-between py-2">
+          <span class="text-on-surface-variant">Project type</span>
+          <span class="font-bold text-on-surface">{{ project_type_label }}</span>
+        </div>
+      </div>
+    </div>
+    <div class="rounded-xl border border-tertiary/20 bg-tertiary-container/10 p-6">
+      <div class="mb-3 flex items-center gap-3">
+        <span class="material-symbols-outlined text-tertiary">warning</span>
+        <h4 class="text-sm font-bold text-on-tertiary-fixed-variant">Regulatory notice</h4>
+      </div>
+      <p class="text-xs leading-relaxed text-on-tertiary-fixed-variant/90">
+        Fees are computed from the registered template and inputs. Final municipal verification may adjust totals.
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a
+        href="/applications/{{ app.id }}/print?copy=both"
+        target="_blank"
+        class="rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-xs font-bold text-on-surface hover:bg-surface-container"
+        >Print both</a
+      >
+      <a
+        href="/applications/{{ app.id }}/print?copy=owner"
+        target="_blank"
+        class="rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-xs font-bold text-on-surface hover:bg-surface-container"
+        >Owner's</a
+      >
+      <a
+        href="/applications/{{ app.id }}/print?copy=file"
+        target="_blank"
+        class="rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-xs font-bold text-on-surface hover:bg-surface-container"
+        >File copy</a
+      >
+      <a href="/applications/{{ app.id }}/classify" class="rounded-xl px-3 py-2 text-xs font-bold text-primary hover:underline">Edit classification</a>
+    </div>
+  </aside>
+</div>
+{% endblock %}

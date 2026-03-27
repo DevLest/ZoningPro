@@ -1,0 +1,19 @@
+{# Mobile bottom bar — expects: nav_active, mobile_fees_href #}
+<div class="fixed bottom-0 left-0 right-0 z-50 flex h-16 items-center justify-around border-t border-slate-200 bg-white px-4 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] md:hidden dark:border-slate-800 dark:bg-slate-900">
+  <a href="/" class="flex flex-col items-center {% if nav_active == 'dashboard' %}text-primary{% else %}text-slate-400{% endif %}">
+    <span class="material-symbols-outlined">dashboard</span>
+    <span class="text-[10px] font-bold">Home</span>
+  </a>
+  <a href="{{ mobile_fees_href }}" class="flex flex-col items-center {% if nav_active == 'estimations' %}text-primary{% else %}text-slate-400{% endif %}">
+    <span class="material-symbols-outlined">calculate</span>
+    <span class="text-[10px] font-bold">Fees</span>
+  </a>
+  <a href="{{ navbar_export_href }}" class="flex flex-col items-center {% if nav_active == 'documents' %}text-primary{% else %}text-slate-400{% endif %}">
+    <span class="material-symbols-outlined">folder</span>
+    <span class="text-[10px] font-bold">Docs</span>
+  </a>
+  <a href="/applications/new" class="flex flex-col items-center {% if nav_active == 'new_application' %}text-primary{% else %}text-slate-400{% endif %}">
+    <span class="material-symbols-outlined">person</span>
+    <span class="text-[10px] font-bold">New</span>
+  </a>
+</div>
