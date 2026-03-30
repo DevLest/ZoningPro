@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Applicants — ZoningPro{% endblock %}
+{% block content %}
+<nav class="mb-4 flex items-center gap-2 text-sm text-on-surface-variant">
+  <a href="/" class="hover:text-primary">Applications</a>
+  <span class="material-symbols-outlined text-xs">chevron_right</span>
+  <span class="font-semibold text-primary">Applicants</span>
+</nav>
+
+<header class="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+  <div>
+    <h1 class="mb-2 text-4xl font-extrabold tracking-tight text-on-surface">Applicants</h1>
+    <p class="text-lg text-on-surface-variant">Everyone on file with LC records; open a profile to see past certificates.</p>
+  </div>
+  {% if permissions.applications.write %}
+  <a
+    href="/applications/new"
+    class="bg-primary-gradient inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-on-primary shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+  >
+    <span class="material-symbols-outlined">add_circle</span>
+    New application
+  </a>
+  {% endif %}
+</header>
+
+<form method="get" action="/applicants" class="mb-6 flex flex-wrap items-end gap-3">
+  <div class="min-w-0 flex-1 space-y-1 sm:max-w-md">
+    <label for="applicants-q" class="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">Search</label>
+    <input
+      id="applicants-q"
+      name="q"
+      type="search"
+      value="{{ search_q }}"
+      placeholder="Name (first, last, middle, suffix)…"
+      class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none transition-all focus:bg-white focus:ring-2 focus:ring-primary"
+    />
+  </div>
+  <button type="submit" class="rounded-xl bg-surface-container-high px-5 py-3 text-sm font-bold text-on-surface hover:bg-surface-container">
+    Filter
+  </button>
+  {% if search_q %}
+  <a href="/applicants" class="rounded-xl border border-outline-variant/40 px-5 py-3 text-sm font-bold text-on-surface-variant hover:bg-surface-container">Clear</a>
+  {% endif %}
+</form>
+
+<div class="overflow-hidden rounded-xl border border-outline-variant/10 bg-surface-container-lowest shadow-sm">
+  <div class="border-b border-surface-container-high px-6 py-4">
+    <h2 class="text-lg font-bold text-on-surface">Directory</h2>
+    <p class="text-xs text-on-surface-variant">Showing up to 500 matches.</p>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-surface-container-low text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+        <tr>
+          <th class="px-6 py-4">Name</th>
+          <th class="px-6 py-4">Applications</th>
+          <th class="px-6 py-4">Latest ctrl #</th>
+          <th class="px-6 py-4 text-right"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-surface-container-high">
+        {% for row in applicant_rows %}
+        <tr class="transition-colors hover:bg-teal-50/30">
+          <td class="px-6 py-4 font-medium text-on-surface">{{ row.display_name }}</td>
+          <td class="px-6 py-4 text-on-surface-variant">{{ row.application_count }}</td>
+          <td class="px-6 py-4 font-mono text-xs text-on-surface-variant">{{ row.recent_ctrl_no or "—" }}</td>
+          <td class="px-6 py-4 text-right">
+            <a class="font-bold text-primary hover:underline" href="/applicants/{{ row.id }}">View</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="px-6 py-12 text-center text-on-surface-variant">No applicants yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

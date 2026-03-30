@@ -30,6 +30,7 @@
 </div>
 
 <form
+  id="new-lc-application-form"
   method="post"
   action="/applications/new"
   class="space-y-8 rounded-xl border border-outline-variant/10 bg-surface-container-lowest p-8 shadow-[0_12px_40px_rgba(0,79,69,0.06)] lg:p-12"
@@ -60,13 +61,71 @@
         class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none transition-all focus:bg-white focus:ring-2 focus:ring-primary"
       />
     </div>
-    <div class="col-span-full space-y-2">
-      <label class="block text-sm font-semibold tracking-wide text-on-surface-variant">Name of Applicant *</label>
-      <input
-        name="applicant_name"
-        required
-        class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none transition-all focus:bg-white focus:ring-2 focus:ring-primary"
-      />
+    <div class="col-span-full space-y-4 rounded-xl border border-outline-variant/10 bg-surface-container-lowest/80 p-6">
+      <div>
+        <h4 class="text-sm font-bold uppercase tracking-wide text-primary">Applicant</h4>
+        <p class="mt-1 text-xs text-on-surface-variant/80">
+          Search an existing applicant to reuse their profile and see past applications, or enter a new person below.
+        </p>
+      </div>
+      <div class="relative space-y-1">
+        <label class="block text-sm font-semibold tracking-wide text-on-surface-variant" for="applicant-search-input">Find existing applicant</label>
+        <input
+          type="search"
+          id="applicant-search-input"
+          autocomplete="off"
+          class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none transition-all focus:bg-white focus:ring-2 focus:ring-primary"
+          placeholder="Type at least 2 letters (name)…"
+        />
+        <ul
+          id="applicant-suggest-list"
+          class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-auto rounded-lg border border-outline-variant/20 bg-white py-1 shadow-lg"
+          role="listbox"
+          hidden
+        ></ul>
+      </div>
+      <input type="hidden" name="existing_applicant_id" id="existing-applicant-id" value="{% if reuse_applicant %}{{ reuse_applicant.id }}{% endif %}" />
+      <div class="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+        <div class="space-y-2">
+          <label class="block text-sm font-semibold tracking-wide text-on-surface-variant">First name *</label>
+          <input
+            name="applicant_first_name"
+            id="applicant-first-name"
+            required
+            value="{{ reuse_applicant.first_name if reuse_applicant else '' }}"
+            class="applicant-name-field w-full rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none transition-all focus:bg-white focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        <div class="space-y-2">
+          <label class="block text-sm font-semibold tracking-wide text-on-surface-variant">Last name *</label>
+          <input
+            name="applicant_last_name"
+            id="applicant-last-name"
+            required
+            value="{{ reuse_applicant.last_name if reuse_applicant else '' }}"
+            class="applicant-name-field w-full rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none transition-all focus:bg-white focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        <div class="space-y-2">
+          <label class="block text-sm font-semibold tracking-wide text-on-surface-variant">Middle name</label>
+          <input
+            name="applicant_middle_name"
+            id="applicant-middle-name"
+            value="{{ (reuse_applicant.middle_name or '') if reuse_applicant else '' }}"
+            class="applicant-name-field w-full rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none transition-all focus:bg-white focus:ring-2 focus:ring-primary"
+          />
+        </div>
+        <div class="space-y-2">
+          <label class="block text-sm font-semibold tracking-wide text-on-surface-variant">Suffix</label>
+          <input
+            name="applicant_suffix"
+            id="applicant-suffix"
+            value="{{ (reuse_applicant.suffix or '') if reuse_applicant else '' }}"
+            class="applicant-name-field w-full rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none transition-all focus:bg-white focus:ring-2 focus:ring-primary"
+            placeholder="Jr., Sr., III…"
+          />
+        </div>
+      </div>
     </div>
     <div class="col-span-full space-y-2">
       <label class="block text-sm font-semibold tracking-wide text-on-surface-variant" for="address-input">Address *</label>
@@ -104,20 +163,26 @@
         class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none transition-all focus:bg-white focus:ring-2 focus:ring-primary"
       />
     </div>
-    <div class="col-span-full space-y-2">
+    <div class="col-span-full space-y-3">
       <label class="block text-sm font-semibold tracking-wide text-on-surface-variant">Doc. Requirements</label>
-      <textarea
-        name="doc_requirements"
-        rows="2"
-        class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none transition-all focus:bg-white focus:ring-2 focus:ring-primary"
-      ></textarea>
+      <p class="text-xs text-on-surface-variant/80">Add each document and quantity; use + for another line.</p>
+      <div id="doc-req-rows" class="space-y-3"></div>
+      <button
+        type="button"
+        id="doc-req-add"
+        class="inline-flex items-center gap-1 rounded-lg border border-outline-variant/40 bg-surface-container-low px-4 py-2 text-sm font-semibold text-primary transition hover:bg-surface-container"
+      >
+        <span class="material-symbols-outlined text-lg leading-none">add</span>
+        Add document
+      </button>
+      <input type="hidden" name="doc_requirements" id="doc-requirements-json" value="[]" />
     </div>
     <div class="space-y-2">
       <label class="block text-sm font-semibold tracking-wide text-on-surface-variant" for="lc-status">LC Status</label>
       <select
         id="lc-status"
         name="lc_status"
-        class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none transition-all focus:bg-white focus:ring-2 focus:ring-primary"
+        class="w-full cursor-pointer rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none transition-all focus:bg-white focus:ring-2 focus:ring-primary"
       >
         {% for val, label in lc_status_options %}
         <option value="{{ val }}">{{ label }}</option>
@@ -267,6 +332,184 @@
       hideList();
     }
   });
+})();
+</script>
+<script>
+(function () {
+  var searchIn = document.getElementById("applicant-search-input");
+  var sugList = document.getElementById("applicant-suggest-list");
+  var hid = document.getElementById("existing-applicant-id");
+  var fn = document.getElementById("applicant-first-name");
+  var ln = document.getElementById("applicant-last-name");
+  var mn = document.getElementById("applicant-middle-name");
+  var sx = document.getElementById("applicant-suffix");
+  if (!searchIn || !sugList || !hid || !fn || !ln) return;
+
+  var debounceMs = 350;
+  var minChars = 2;
+  var timer = null;
+
+  function hideSug() {
+    sugList.classList.add("hidden");
+    sugList.hidden = true;
+    sugList.innerHTML = "";
+  }
+
+  function clearLinkedApplicant() {
+    hid.value = "";
+  }
+
+  function applyPick(item) {
+    hid.value = String(item.id);
+    fn.value = item.first_name || "";
+    ln.value = item.last_name || "";
+    mn.value = item.middle_name || "";
+    if (sx) sx.value = item.suffix || "";
+    searchIn.value = "";
+    hideSug();
+  }
+
+  document.querySelectorAll(".applicant-name-field").forEach(function (el) {
+    el.addEventListener("input", function () {
+      clearLinkedApplicant();
+    });
+  });
+
+  function renderSug(items) {
+    sugList.innerHTML = "";
+    items.forEach(function (item, i) {
+      var li = document.createElement("li");
+      li.setAttribute("role", "option");
+      li.className =
+        "cursor-pointer border-b border-outline-variant/10 px-3 py-2.5 text-sm last:border-0 hover:bg-primary/10";
+      var title = document.createElement("div");
+      title.className = "font-semibold text-on-surface";
+      title.textContent = item.display_name || "";
+      var meta = document.createElement("div");
+      meta.className = "mt-0.5 text-xs text-on-surface-variant";
+      var parts = [];
+      if (item.application_count != null)
+        parts.push(item.application_count + " prior application" + (item.application_count === 1 ? "" : "s"));
+      if (item.recent_ctrl_no) parts.push("latest " + item.recent_ctrl_no);
+      meta.textContent = parts.length ? parts.join(" · ") : "No prior applications";
+      li.appendChild(title);
+      li.appendChild(meta);
+      li.addEventListener("mousedown", function (e) {
+        e.preventDefault();
+        applyPick(item);
+      });
+      sugList.appendChild(li);
+    });
+    if (items.length) {
+      sugList.classList.remove("hidden");
+      sugList.hidden = false;
+    } else {
+      hideSug();
+    }
+  }
+
+  function fetchSug() {
+    var q = searchIn.value.trim();
+    if (q.length < minChars) {
+      hideSug();
+      return;
+    }
+    fetch("/api/applicants/suggest?q=" + encodeURIComponent(q), { credentials: "same-origin" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("bad");
+        return r.json();
+      })
+      .then(function (data) {
+        renderSug(Array.isArray(data) ? data : []);
+      })
+      .catch(function () {
+        hideSug();
+      });
+  }
+
+  searchIn.addEventListener("input", function () {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(fetchSug, debounceMs);
+  });
+
+  document.addEventListener("click", function (e) {
+    if (e.target !== searchIn && !sugList.contains(e.target)) hideSug();
+  });
+})();
+</script>
+<script>
+(function () {
+  var rowsEl = document.getElementById("doc-req-rows");
+  var addBtn = document.getElementById("doc-req-add");
+  var hidden = document.getElementById("doc-requirements-json");
+  var form = document.getElementById("new-lc-application-form");
+  if (!rowsEl || !addBtn || !hidden || !form) return;
+
+  function rowHtml() {
+    return (
+      '<div class="doc-req-row flex flex-wrap items-end gap-3 rounded-lg border border-outline-variant/15 bg-surface-container-lowest p-3">' +
+      '<div class="min-w-0 flex-1 space-y-1">' +
+      '<span class="block text-xs font-semibold text-on-surface-variant">Document name</span>' +
+      '<input type="text" class="doc-req-name w-full rounded-lg border-none bg-surface-container-low px-3 py-2.5 text-sm font-medium text-on-surface outline-none focus:bg-white focus:ring-2 focus:ring-primary" placeholder="e.g. Birth certificate" />' +
+      "</div>" +
+      '<div class="w-24 space-y-1">' +
+      '<span class="block text-xs font-semibold text-on-surface-variant">Qty</span>' +
+      '<input type="number" min="1" step="1" value="1" class="doc-req-qty w-full rounded-lg border-none bg-surface-container-low px-3 py-2.5 text-sm font-medium text-on-surface outline-none focus:bg-white focus:ring-2 focus:ring-primary" />' +
+      "</div>" +
+      '<button type="button" class="doc-req-remove flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-outline-variant/30 text-on-surface-variant hover:bg-surface-container disabled:pointer-events-none disabled:opacity-40" aria-label="Remove row" title="Remove row">' +
+      '<span class="material-symbols-outlined text-xl leading-none">remove</span>' +
+      "</button>" +
+      "</div>"
+    );
+  }
+
+  function addRow() {
+    var wrap = document.createElement("div");
+    wrap.innerHTML = rowHtml().trim();
+    var row = wrap.firstElementChild;
+    rowsEl.appendChild(row);
+    row.querySelector(".doc-req-remove").addEventListener("click", function () {
+      if (rowsEl.querySelectorAll(".doc-req-row").length <= 1) return;
+      row.remove();
+      syncRemoveState();
+    });
+    syncRemoveState();
+    var nameInput = row.querySelector(".doc-req-name");
+    if (nameInput) nameInput.focus();
+  }
+
+  function syncRemoveState() {
+    var rowNodes = rowsEl.querySelectorAll(".doc-req-row");
+    var canRemove = rowNodes.length > 1;
+    rowNodes.forEach(function (row) {
+      var btn = row.querySelector(".doc-req-remove");
+      if (btn) btn.disabled = !canRemove;
+    });
+  }
+
+  function collectDocReqs() {
+    var out = [];
+    rowsEl.querySelectorAll(".doc-req-row").forEach(function (row) {
+      var nameEl = row.querySelector(".doc-req-name");
+      var qtyEl = row.querySelector(".doc-req-qty");
+      var name = nameEl ? nameEl.value.trim() : "";
+      if (!name) return;
+      var qty = qtyEl ? parseInt(qtyEl.value, 10) : 1;
+      if (!qty || qty < 1) qty = 1;
+      out.push({ name: name, qty: qty });
+    });
+    return JSON.stringify(out);
+  }
+
+  addBtn.addEventListener("click", function () {
+    addRow();
+  });
+
+  form.addEventListener("submit", function () {
+    hidden.value = collectDocReqs();
+  });
+
+  addRow();
 })();
 </script>
 {% endblock %}

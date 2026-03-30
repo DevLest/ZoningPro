@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -36,6 +37,7 @@ def build_assessment_pdf(
     total: float,
     zoning_waived: bool = False,
     branding: dict[str, str] | None = None,
+    copy_kind: Literal["owner", "file"] = "owner",
 ) -> None:
     del template_id  # PDF matches official slip; no Excel metadata line.
     b = branding or {}
@@ -102,6 +104,7 @@ def build_assessment_pdf(
         return Paragraph(txt.replace("&", "&amp;"), style)
 
     zoning_txt = "0.00 (waived)" if zoning_waived else format_peso_plain(zoning)
+    copy_banner = "OWNER'S COPY" if copy_kind == "owner" else "FILE COPY"
 
     inner = [
         [
@@ -117,6 +120,7 @@ def build_assessment_pdf(
             "",
         ],
         [cell("<b>Computation Slip</b>", ParagraphStyle("cs", parent=tiny_center_b, fontSize=9)), "", "", ""],
+        [cell(f"<b>{copy_banner}</b>", ParagraphStyle("copy_lbl", parent=tiny_center_b, fontSize=8)), "", "", ""],
         [cell("Applicant:", tiny_b), cell(applicant, tiny), "", ""],
         [cell("Address:", tiny_b), cell(address, tiny), "", ""],
         [cell("Project:", tiny_b), cell(project or "—", tiny), "", ""],
@@ -185,22 +189,23 @@ def build_assessment_pdf(
                 ("GRID", (0, 0), (-1, -1), 0.5, black),
                 ("SPAN", (0, 1), (3, 1)),
                 ("SPAN", (0, 2), (3, 2)),
-                ("SPAN", (1, 3), (3, 3)),
+                ("SPAN", (0, 3), (3, 3)),
                 ("SPAN", (1, 4), (3, 4)),
                 ("SPAN", (1, 5), (3, 5)),
                 ("SPAN", (1, 6), (3, 6)),
                 ("SPAN", (1, 7), (3, 7)),
                 ("SPAN", (1, 8), (3, 8)),
                 ("SPAN", (1, 9), (3, 9)),
-                ("SPAN", (0, 10), (3, 10)),
+                ("SPAN", (1, 10), (3, 10)),
                 ("SPAN", (0, 11), (3, 11)),
-                ("SPAN", (2, 12), (3, 12)),
+                ("SPAN", (0, 12), (3, 12)),
                 ("SPAN", (2, 13), (3, 13)),
                 ("SPAN", (2, 14), (3, 14)),
                 ("SPAN", (2, 15), (3, 15)),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("SPAN", (0, 16), (1, 16)),
                 ("SPAN", (2, 16), (3, 16)),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("SPAN", (0, 17), (1, 17)),
+                ("SPAN", (2, 17), (3, 17)),
             ]
         )
     )

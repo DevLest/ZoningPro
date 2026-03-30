@@ -67,8 +67,13 @@
             <td class="slip-cell px-2 py-1 text-center text-[11px] font-bold" colspan="8">Computation Slip</td>
           </tr>
           <tr>
+            <td class="slip-cell px-2 py-1 text-center text-[9px] font-bold uppercase tracking-wider text-slate-800" colspan="8">
+              {% if loop.first %}Owner's copy{% else %}File copy{% endif %}
+            </td>
+          </tr>
+          <tr>
             <td class="slip-cell px-2 py-1 font-semibold" colspan="2">Applicant:</td>
-            <td class="slip-cell px-2 py-1" colspan="6">{{ app.applicant_name }}</td>
+            <td class="slip-cell px-2 py-1" colspan="6">{{ app.applicant_display_name }}</td>
           </tr>
           <tr>
             <td class="slip-cell px-2 py-1 font-semibold" colspan="2">Address:</td>

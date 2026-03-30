@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Float, String, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
 
@@ -30,13 +32,35 @@ class RolePermission(Base):
     can_write: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class Applicant(Base):
+    """Reusable person record; multiple LC applications can reference one applicant."""
+
+    __tablename__ = "applicants"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    first_name: Mapped[str] = mapped_column(String(128), default="")
+    last_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    middle_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    suffix: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    applications: Mapped[list[LCApplication]] = relationship(back_populates="applicant")
+
+    @property
+    def display_name(self) -> str:
+        from app.applicant_service import applicant_display_name  # noqa: PLC0415
+
+        return applicant_display_name(self)
+
+
 class LCApplication(Base):
     __tablename__ = "lc_applications"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     lc_ctrl_no: Mapped[str] = mapped_column(String(64), index=True)
     date_of_application: Mapped[date] = mapped_column(Date())
-    applicant_name: Mapped[str] = mapped_column(String(256))
+    applicant_id: Mapped[int] = mapped_column(ForeignKey("applicants.id"), index=True)
+    applicant: Mapped[Applicant] = relationship(back_populates="applications")
     address: Mapped[str] = mapped_column(String(512))
     project_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
     project_location: Mapped[str | None] = mapped_column(String(512), nullable=True)
@@ -58,3 +82,9 @@ class LCApplication(Base):
     waive_zoning_cert: Mapped[bool] = mapped_column(Boolean, default=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    @property
+    def applicant_display_name(self) -> str:
+        if self.applicant is None:
+            return "—"
+        return self.applicant.display_name

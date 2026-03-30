@@ -7,6 +7,7 @@ from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 
+from app.doc_requirements import format_doc_requirements_for_export
 from app.models import LCApplication
 
 
@@ -41,11 +42,11 @@ def export_lc_workbook(rows: list[LCApplication], path: Path) -> None:
     for r, app in enumerate(rows, 2):
         ws.cell(row=r, column=1, value=app.lc_ctrl_no)
         ws.cell(row=r, column=2, value=app.date_of_application)
-        ws.cell(row=r, column=3, value=app.applicant_name)
+        ws.cell(row=r, column=3, value=app.applicant_display_name)
         ws.cell(row=r, column=4, value=app.address)
         ws.cell(row=r, column=5, value=app.project_name)
         ws.cell(row=r, column=6, value=app.project_location)
-        ws.cell(row=r, column=7, value=app.doc_requirements)
+        ws.cell(row=r, column=7, value=format_doc_requirements_for_export(app.doc_requirements))
         ws.cell(row=r, column=8, value=app.lc_status)
         ws.cell(row=r, column=9, value=app.date_granted)
         ws.cell(row=r, column=10, value=app.lc_fees)
@@ -74,7 +75,7 @@ def export_lc_workbook(rows: list[LCApplication], path: Path) -> None:
         cls = class_map.get(app.category or "", "")
         ws2.cell(row=r, column=1, value=app.lc_ctrl_no)
         ws2.cell(row=r, column=2, value=cls)
-        ws2.cell(row=r, column=3, value=app.applicant_name)
+        ws2.cell(row=r, column=3, value=app.applicant_display_name)
         ws2.cell(row=r, column=4, value=app.address)
         ws2.cell(row=r, column=5, value=app.project_location or "")
         ws2.cell(row=r, column=6, value=app.total)

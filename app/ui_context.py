@@ -68,8 +68,8 @@ def shell_for_application(
     """Shell context when an LC application row is the current workflow focus."""
     title = (row.project_name or "").strip() or row.lc_ctrl_no
     subtitle_parts = []
-    if row.applicant_name:
-        subtitle_parts.append(row.applicant_name)
+    if row.applicant_display_name and row.applicant_display_name != "—":
+        subtitle_parts.append(row.applicant_display_name)
     if row.project_location:
         subtitle_parts.append(row.project_location)
     subtitle = " · ".join(subtitle_parts) if subtitle_parts else "Application workspace"

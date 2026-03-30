@@ -57,7 +57,13 @@
         {% for a in applications %}
         <tr class="transition-colors hover:bg-teal-50/30">
           <td class="px-6 py-4 font-mono text-xs font-bold text-primary">{{ a.lc_ctrl_no }}</td>
-          <td class="px-6 py-4 font-medium text-on-surface">{{ a.applicant_name }}</td>
+          <td class="px-6 py-4 font-medium text-on-surface">
+            {% if a.applicant %}
+            <a class="text-primary hover:underline" href="/applicants/{{ a.applicant.id }}">{{ a.applicant_display_name }}</a>
+            {% else %}
+            {{ a.applicant_display_name }}
+            {% endif %}
+          </td>
           <td class="px-6 py-4 text-on-surface-variant">{{ a.date_of_application }}</td>
           <td class="px-6 py-4 text-right font-mono">
             {% if a.total is not none %}₱{{ "%.2f"|format(a.total) }}{% else %}—{% endif %}

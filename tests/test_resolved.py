@@ -1,14 +1,15 @@
 from datetime import date
 
-from app.models import LCApplication
+from app.models import Applicant, LCApplication
 from app.resolved_fees import display_fees_for_application
 
 
 def test_waive_zoning_sets_zero_zc():
+    applicant = Applicant(first_name="A", last_name="T")
     row = LCApplication(
         lc_ctrl_no="T",
         date_of_application=date.today(),
-        applicant_name="A",
+        applicant=applicant,
         address="X",
         category="commercial",
         template_id="commercial_100k",
@@ -23,10 +24,11 @@ def test_waive_zoning_sets_zero_zc():
 
 
 def test_surcharge_override():
+    applicant = Applicant(first_name="A", last_name="T")
     row = LCApplication(
         lc_ctrl_no="T",
         date_of_application=date.today(),
-        applicant_name="A",
+        applicant=applicant,
         address="X",
         category="commercial",
         template_id="commercial_100k",
@@ -39,10 +41,11 @@ def test_surcharge_override():
 
 
 def test_lc_fee_override():
+    applicant = Applicant(first_name="A", last_name="T")
     row = LCApplication(
         lc_ctrl_no="T",
         date_of_application=date.today(),
-        applicant_name="A",
+        applicant=applicant,
         address="X",
         category="commercial",
         template_id="commercial_100k",

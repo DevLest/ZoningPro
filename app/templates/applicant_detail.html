@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{{ applicant.display_name }} — Applicant — ZoningPro{% endblock %}
+{% block content %}
+<nav class="mb-4 flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
+  <a href="/" class="hover:text-primary">Applications</a>
+  <span class="material-symbols-outlined text-xs">chevron_right</span>
+  <a href="/applicants" class="hover:text-primary">Applicants</a>
+  <span class="material-symbols-outlined text-xs">chevron_right</span>
+  <span class="font-semibold text-primary">Profile</span>
+</nav>
+
+<div class="mb-8">
+  <h1 class="mb-2 text-3xl font-extrabold tracking-tight text-primary">{{ applicant.display_name }}</h1>
+  <dl class="mt-4 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2 md:grid-cols-4">
+    <div>
+      <dt class="font-semibold text-on-surface-variant">First name</dt>
+      <dd class="text-on-surface">{{ applicant.first_name or "—" }}</dd>
+    </div>
+    <div>
+      <dt class="font-semibold text-on-surface-variant">Last name</dt>
+      <dd class="text-on-surface">{{ applicant.last_name }}</dd>
+    </div>
+    <div>
+      <dt class="font-semibold text-on-surface-variant">Middle name</dt>
+      <dd class="text-on-surface">{{ applicant.middle_name or "—" }}</dd>
+    </div>
+    <div>
+      <dt class="font-semibold text-on-surface-variant">Suffix</dt>
+      <dd class="text-on-surface">{{ applicant.suffix or "—" }}</dd>
+    </div>
+  </dl>
+  <p class="mt-4 text-on-surface-variant">
+    <span class="font-bold text-on-surface">{{ applications|length }}</span>
+    locational clearance application{% if applications|length != 1 %}s{% endif %} on file.
+  </p>
+</div>
+
+<div class="overflow-hidden rounded-xl border border-outline-variant/10 bg-surface-container-lowest shadow-sm">
+  <div class="border-b border-surface-container-high px-6 py-4">
+    <h2 class="text-lg font-bold text-on-surface">Applications for this applicant</h2>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-surface-container-low text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+        <tr>
+          <th class="px-6 py-4">Ctrl #</th>
+          <th class="px-6 py-4">Date</th>
+          <th class="px-6 py-4">Status</th>
+          <th class="px-6 py-4 text-right">Total</th>
+          <th class="px-6 py-4"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-surface-container-high">
+        {% for a in applications %}
+        <tr class="transition-colors hover:bg-teal-50/30">
+          <td class="px-6 py-4 font-mono text-xs font-bold text-primary">{{ a.lc_ctrl_no }}</td>
+          <td class="px-6 py-4 text-on-surface-variant">{{ a.date_of_application }}</td>
+          <td class="px-6 py-4 text-on-surface-variant">{{ a.lc_status or "—" }}</td>
+          <td class="px-6 py-4 text-right font-mono">
+            {% if a.total is not none %}₱{{ "%.2f"|format(a.total) }}{% else %}—{% endif %}
+          </td>
+          <td class="px-6 py-4 text-right">
+            {% if a.template_id %}
+            <a class="font-bold text-primary hover:underline" href="/applications/{{ a.id }}/assessment">Open</a>
+            {% else %}
+            <a class="font-bold text-primary hover:underline" href="/applications/{{ a.id }}/classify">Open</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="px-6 py-10 text-center text-on-surface-variant">No applications linked.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if permissions.applications.write %}
+<div class="mt-8">
+  <a
+    href="/applications/new?reuse={{ applicant.id }}"
+    class="bg-primary-gradient inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-on-primary shadow-lg transition hover:scale-[1.02]"
+  >
+    <span class="material-symbols-outlined text-lg">add_circle</span>
+    New application for this person
+  </a>
+</div>
+{% endif %}
+{% endblock %}

@@ -54,9 +54,64 @@ def _migrate_users_roles() -> None:
             conn.execute(text("UPDATE users SET role = 'staff' WHERE role IS NULL OR role = ''"))
 
 
+def _migrate_applicants_fk() -> None:
+    """Add applicant_id to lc_applications, backfill from legacy applicant_name, drop old column when possible."""
+    from sqlalchemy import text
+
+    from app.models import Applicant
+
+    insp = inspect(engine)
+    if not insp.has_table("lc_applications"):
+        return
+    cols = {c["name"] for c in insp.get_columns("lc_applications")}
+    has_legacy_name = "applicant_name" in cols
+
+    if "applicant_id" not in cols:
+        with engine.begin() as conn:
+            conn.execute(
+                text("ALTER TABLE lc_applications ADD COLUMN applicant_id INTEGER REFERENCES applicants(id)")
+            )
+
+    db = SessionLocal()
+    try:
+        if has_legacy_name:
+            rows = db.execute(
+                text("SELECT id, applicant_name FROM lc_applications WHERE applicant_id IS NULL")
+            ).all()
+            for rid, legacy_raw in rows:
+                legacy_name = (legacy_raw or "").strip() or "Unknown"
+                ap = (
+                    db.query(Applicant)
+                    .filter(Applicant.first_name == "")
+                    .filter(Applicant.last_name == legacy_name)
+                    .filter(Applicant.middle_name.is_(None))
+                    .filter(Applicant.suffix.is_(None))
+                    .first()
+                )
+                if not ap:
+                    ap = Applicant(first_name="", last_name=legacy_name, middle_name=None, suffix=None)
+                    db.add(ap)
+                    db.flush()
+                db.execute(
+                    text("UPDATE lc_applications SET applicant_id = :aid WHERE id = :id"),
+                    {"aid": ap.id, "id": rid},
+                )
+            db.commit()
+
+        if has_legacy_name:
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE lc_applications DROP COLUMN applicant_name"))
+            except Exception:
+                pass
+    finally:
+        db.close()
+
+
 def init_db():
     from app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     _migrate_sqlite_schema()
     _migrate_users_roles()
+    _migrate_applicants_fk()

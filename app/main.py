@@ -9,7 +9,8 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.orm import Session, joinedload
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.auth import (
@@ -27,12 +28,19 @@ from app.auth import (
     verify_password,
 )
 from app.config import EXPORTS_DIR, PROJECT_ROOT, SECRET_KEY
+from app.doc_requirements import normalize_doc_requirements_post
 from app.db import SessionLocal, get_db, init_db
 from app.export_excel import export_lc_workbook
 from app.geocode import address_suggestions
 from app.fees import TEMPLATE_REGISTRY, compute_fees, list_categories, suggest_template
 from app.fees.registry import get_template
-from app.models import LCApplication, RolePermission, User
+from app.models import Applicant, LCApplication, RolePermission, User
+from app.applicant_service import (
+    applicant_suggestion_dicts,
+    list_applicants_for_directory,
+    resolve_applicant_for_intake,
+    search_applicants_for_suggest,
+)
 from app.permission_defs import MODULES, MODULE_KEYS, ROLE_ADMIN, ROLE_STAFF
 from app.pdf_slip import build_assessment_pdf
 from app.resolved_fees import DisplayFees, display_fees_for_application
@@ -56,8 +64,11 @@ PROJECT_TYPE_DISPLAY = {
     "special_use": "SPECIAL USE",
 }
 
+# Non-empty placeholder so the closed <select> shows a label (empty value often renders blank on Windows).
+LC_STATUS_UNSET = "__lc_status_unset__"
+
 LC_STATUS_OPTIONS: list[tuple[str, str]] = [
-    ("", "— Select status —"),
+    (LC_STATUS_UNSET, "— Select status —"),
     ("Pending", "Pending"),
     ("Under review", "Under review"),
     ("Approved", "Approved"),
@@ -65,7 +76,14 @@ LC_STATUS_OPTIONS: list[tuple[str, str]] = [
     ("Denied", "Denied"),
     ("Cancelled", "Cancelled"),
 ]
-LC_STATUS_KNOWN = {v for v, _ in LC_STATUS_OPTIONS if v}
+LC_STATUS_KNOWN = {v for v, _ in LC_STATUS_OPTIONS if v and v != LC_STATUS_UNSET}
+
+
+def _normalize_lc_status(raw: str | None) -> str | None:
+    s = (raw or "").strip()
+    if not s or s == LC_STATUS_UNSET:
+        return None
+    return s
 
 templates = Jinja2Templates(directory=str(PROJECT_ROOT / "app" / "templates"))
 
@@ -540,7 +558,7 @@ def _apply_assessment_inputs(
     lc_fee_amount: str | None,
     db: Session,
 ) -> DisplayFees:
-    row.lc_status = (lc_status or "").strip() or None
+    row.lc_status = _normalize_lc_status(lc_status)
     row.date_granted = _parse_date(date_granted)
     ou = (optional_units or "").strip()
     row.optional_units = float(ou) if ou else None
@@ -672,7 +690,16 @@ def settings_post(
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db), user: User = Depends(require_dashboard_read)):
-    apps = db.query(LCApplication).order_by(LCApplication.created_at.desc()).limit(100).all()
+    apps = (
+        db.scalars(
+            select(LCApplication)
+            .options(joinedload(LCApplication.applicant))
+            .order_by(LCApplication.created_at.desc())
+            .limit(100)
+        )
+        .unique()
+        .all()
+    )
     classified_count = sum(1 for a in apps if a.template_id)
     with_totals_count = sum(1 for a in apps if a.total is not None)
     return templates.TemplateResponse(
@@ -697,13 +724,19 @@ def new_application_form(
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(require_applications_write),
+    reuse: int | None = Query(None, description="Existing applicant id to pre-fill the form."),
 ):
     today = date.today().isoformat()
+    reuse_applicant = db.get(Applicant, reuse) if reuse is not None else None
     return templates.TemplateResponse(
         request,
         "new.html",
         merge_shell(
-            {"today": today, "lc_status_options": LC_STATUS_OPTIONS},
+            {
+                "today": today,
+                "lc_status_options": LC_STATUS_OPTIONS,
+                "reuse_applicant": reuse_applicant,
+            },
             current_user=user,
             db=db,
             nav_active="new_application",
@@ -718,7 +751,11 @@ def new_application_form(
 def new_application_post(
     lc_ctrl_no: str = Form(...),
     date_of_application: str = Form(...),
-    applicant_name: str = Form(...),
+    applicant_first_name: str = Form(...),
+    applicant_last_name: str = Form(...),
+    applicant_middle_name: str = Form(""),
+    applicant_suffix: str = Form(""),
+    existing_applicant_id: str = Form(""),
     address: str = Form(...),
     project_name: str = Form(""),
     project_location: str = Form(""),
@@ -728,21 +765,105 @@ def new_application_post(
     db: Session = Depends(get_db),
     _user: User = Depends(require_applications_write),
 ):
+    try:
+        ap = resolve_applicant_for_intake(
+            db,
+            existing_applicant_id=existing_applicant_id,
+            first_name=applicant_first_name,
+            last_name=applicant_last_name,
+            middle_name=applicant_middle_name,
+            suffix=applicant_suffix,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     row = LCApplication(
         lc_ctrl_no=lc_ctrl_no.strip(),
         date_of_application=_parse_date(date_of_application) or date.today(),
-        applicant_name=applicant_name.strip(),
+        applicant_id=ap.id,
         address=address.strip(),
         project_name=project_name.strip() or None,
         project_location=project_location.strip() or None,
-        doc_requirements=doc_requirements.strip() or None,
-        lc_status=lc_status.strip() or None,
+        doc_requirements=normalize_doc_requirements_post(doc_requirements),
+        lc_status=_normalize_lc_status(lc_status),
         date_granted=_parse_date(date_granted),
     )
     db.add(row)
     db.commit()
     db.refresh(row)
     return RedirectResponse(url=f"/applications/{row.id}/classify", status_code=303)
+
+
+@app.get("/api/applicants/suggest")
+def applicants_suggest(
+    q: str = "",
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_applications_read),
+):
+    found = search_applicants_for_suggest(db, q, limit=15)
+    return applicant_suggestion_dicts(db, found)
+
+
+@app.get("/applicants", response_class=HTMLResponse)
+def applicants_list(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_applications_read),
+    q: str | None = Query(None, description="Filter by name (optional)."),
+):
+    found = list_applicants_for_directory(db, q, limit=500)
+    rows = applicant_suggestion_dicts(db, found)
+    return templates.TemplateResponse(
+        request,
+        "applicants_list.html",
+        merge_shell(
+            {
+                "applicant_rows": rows,
+                "search_q": (q or "").strip(),
+            },
+            current_user=user,
+            db=db,
+            nav_active="dashboard",
+            sidebar_active="applicants",
+            project_title="Applicants",
+            project_subtitle="Directory",
+        ),
+    )
+
+
+@app.get("/applicants/{applicant_id}", response_class=HTMLResponse)
+def applicant_detail(
+    request: Request,
+    applicant_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_applications_read),
+):
+    ap = db.get(Applicant, applicant_id)
+    if not ap:
+        raise HTTPException(status_code=404)
+    apps = (
+        db.scalars(
+            select(LCApplication)
+            .where(LCApplication.applicant_id == applicant_id)
+            .order_by(LCApplication.created_at.desc())
+        )
+        .all()
+    )
+    return templates.TemplateResponse(
+        request,
+        "applicant_detail.html",
+        merge_shell(
+            {
+                "applicant": ap,
+                "applications": apps,
+            },
+            current_user=user,
+            db=db,
+            nav_active="dashboard",
+            sidebar_active="applicants",
+            project_title=ap.display_name,
+            project_subtitle="Applicant history",
+        ),
+    )
 
 
 @app.get("/applications/{app_id}/classify", response_class=HTMLResponse)
@@ -951,6 +1072,10 @@ def print_slip(
 def download_pdf(
     app_id: int,
     inline: bool = Query(False, description="If true, serve PDF for inline viewing (e.g. modal iframe)."),
+    copy: Literal["owner", "file"] = Query(
+        "owner",
+        description="Which copy label to print on the slip (owner's copy vs file copy).",
+    ),
     db: Session = Depends(get_db),
     _user: User = Depends(require_applications_read),
 ):
@@ -965,7 +1090,7 @@ def download_pdf(
         out_path=out,
         ctrl_no=row.lc_ctrl_no,
         app_date=row.date_of_application.strftime("%m/%d/%Y"),
-        applicant=row.applicant_name,
+        applicant=row.applicant_display_name,
         address=row.address,
         project=row.project_name or "",
         location=row.project_location or "",
@@ -979,6 +1104,7 @@ def download_pdf(
         total=display.total,
         zoning_waived=display.zoning_waived,
         branding=get_print_profile(PRINT_PROFILE_LC),
+        copy_kind=copy,
     )
     safe_name = f"LC_{row.lc_ctrl_no.replace('/', '-')}_assessment.pdf"
     if inline:
@@ -993,7 +1119,15 @@ def download_pdf(
 
 @app.get("/export/applications.xlsx")
 def export_all_xlsx(db: Session = Depends(get_db), _user: User = Depends(require_export_read)):
-    rows = db.query(LCApplication).order_by(LCApplication.id.asc()).all()
+    rows = (
+        db.scalars(
+            select(LCApplication)
+            .options(joinedload(LCApplication.applicant))
+            .order_by(LCApplication.id.asc())
+        )
+        .unique()
+        .all()
+    )
     out = EXPORTS_DIR / "lc_applications_export.xlsx"
     export_lc_workbook(rows, out)
     return FileResponse(
