@@ -54,6 +54,7 @@ from app.settings_store import (
     save_settings,
 )
 from app.ui_context import merge_shell, shell_for_application
+from app.locational_clearance import router as locational_clearance_router
 
 PROJECT_TYPE_DISPLAY = {
     "residential": "RESIDENTIAL",
@@ -109,6 +110,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Zoning Assessment", version="1.0.0", lifespan=lifespan)
+
+app.include_router(locational_clearance_router)
 
 app.add_middleware(
     SessionMiddleware,

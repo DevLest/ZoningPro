@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>LC Form 2 — {{ c.application_number or c.id }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print { .no-print { display: none !important; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+    .cell { border: 1px solid #0f172a; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 print:bg-white">
+  <div class="no-print mx-auto max-w-4xl px-4 py-4">
+    <button type="button" onclick="window.print()" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Print or Save as PDF</button>
+    <a href="/locational-clearance/{{ c.id }}" class="ml-3 text-sm text-emerald-800 hover:underline">Back to case</a>
+  </div>
+  <div class="mx-auto max-w-4xl px-4 pb-10 font-sans text-[11px] leading-snug print:max-w-none">
+    <article class="border-2 border-slate-900 bg-white p-4 print:border-black">
+      <header class="mb-3 flex gap-3 border-b pb-3">
+        <img src="/static/{{ print_branding.logo_static_relpath }}" alt="" width="64" height="64" class="h-16 w-16 shrink-0 object-contain"/>
+        <div class="flex-1 text-center">
+          <p class="text-[10px]">{{ print_branding.republic_label }}</p>
+          <p class="text-[11px] font-semibold">{{ print_branding.municipality_label }}</p>
+          <p class="text-[10px] font-bold uppercase">{{ print_branding.office_label }}</p>
+        </div>
+      </header>
+      <p class="mb-4 text-center text-[10px] font-bold">LC Form 2</p>
+      <div class="mb-3 grid grid-cols-2 gap-2 text-[10px]">
+        <div class="cell px-2 py-1"><span class="font-semibold">Application No.</span> {{ c.application_number or "—" }}</div>
+        <div class="cell px-2 py-1 text-right">{{ print_branding.republic_label }}</div>
+        <div class="cell px-2 py-1"><span class="font-semibold">Date of Receipt</span> {% if c.date_of_receipt %}{{ c.date_of_receipt.strftime("%m/%d/%Y") }}{% else %}—{% endif %}</div>
+        <div class="cell px-2 py-1 text-right">{{ print_branding.municipality_label }}</div>
+        <div class="cell px-2 py-1"><span class="font-semibold">Decision No.</span> {{ c.decision_number or "—" }}</div>
+        <div class="cell px-2 py-1 text-right">{{ print_branding.office_label }}</div>
+        <div class="cell px-2 py-1"><span class="font-semibold">Date of Issue</span> {% if c.decision_date %}{{ c.decision_date.strftime("%m/%d/%Y") }}{% elif c.or_date %}{{ c.or_date.strftime("%m/%d/%Y") }}{% else %}—{% endif %}</div>
+        <div class="cell px-2 py-1"></div>
+      </div>
+      <p class="mb-2 text-center text-[12px] font-bold">DECISION ON ZONING</p>
+      <table class="w-full border-collapse border-2 border-slate-900 text-[10px]">
+        <tr>
+          <td class="cell px-2 py-1 font-semibold" colspan="2">NAME OF APPLICANT</td>
+          <td class="cell px-2 py-1 font-semibold" colspan="2">NAME OF CORPORATION</td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.applicant_line }}</td>
+          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.corporation_line }}</td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-1 font-semibold" colspan="2">ADDRESS OF APPLICANT</td>
+          <td class="cell px-2 py-1 font-semibold" colspan="2">ADDRESS OF CORPORATION</td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.applicant_address }}</td>
+          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.corporation_address or "—" }}</td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-1 font-semibold" colspan="2">TYPE OF PROJECT</td>
+          <td class="cell px-2 py-1 font-semibold" colspan="2">AREAS</td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.project_title }}</td>
+          <td class="cell px-2 py-2 align-top" colspan="2">
+            Bldg. Area: {% if c.building_area_sqm is not none %}{{ "{:,.2f}".format(c.building_area_sqm) }}{% else %}0{% endif %} sq.m.<br/>
+            Lot Area: {% if c.lot_area_sqm is not none %}{{ "{:,.2f}".format(c.lot_area_sqm) }}{% else %}—{% endif %} sq.m.<br/>
+            Location: {{ c.project_location or "—" }}
+          </td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-1 font-semibold" colspan="2">DECISION</td>
+          <td class="cell px-2 py-1 font-semibold" colspan="2">RIGHT OVER LAND</td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-2 align-top font-bold" colspan="2">{{ c.decision_headline or "LOCATIONAL CLEARANCE GRANTED" }}</td>
+          <td class="cell px-2 py-2 align-top" colspan="2">
+            {% if c.right_over_land == 'owner' %}☑ Owner{% else %}☐ Owner{% endif %}
+            {% if c.right_over_land == 'lessee' %}☑ Lessee{% else %}☐ Lessee{% endif %}
+            {% if c.right_over_land == 'other' %}☑ Other: {{ c.right_over_land_other or "" }}{% endif %}<br/>
+            TCT/OCT No.: {{ c.tct_oct_number or "—" }}
+          </td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-1 font-semibold" colspan="4">ADDITIONAL CONDITIONS / REQUIREMENTS</td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-3 align-top whitespace-pre-wrap" colspan="4">{{ c.additional_conditions or "—" }}</td>
+        </tr>
+      </table>
+      <div class="mt-6 text-center text-[10px]">
+        <p class="font-semibold">{{ print_branding.signatory_name }}</p>
+        <p>{{ print_branding.signatory_role }}</p>
+      </div>
+      <div class="mt-6 grid grid-cols-3 gap-2 border-t pt-2 text-[10px]">
+        <div>Paid under O.R. No. {{ c.or_number or "—" }}</div>
+        <div>Date Issued {% if c.or_date %}{{ c.or_date.strftime("%m/%d/%Y") }}{% else %}—{% endif %}</div>
+        <div>Amount {% if c.amount_paid is not none %}{{ "{:,.2f}".format(c.amount_paid) }}{% else %}—{% endif %}</div>
+      </div>
+    </article>
+  </div>
+</body>
+</html>

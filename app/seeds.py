@@ -14,6 +14,7 @@ def _default_staff_permissions() -> list[tuple[str, bool, bool]]:
     return [
         ("dashboard", True, False),
         ("applications", True, True),
+        ("locational_clearance", True, True),
         ("settings", False, False),
         ("export", True, False),
         ("users", False, False),
@@ -22,14 +23,17 @@ def _default_staff_permissions() -> list[tuple[str, bool, bool]]:
 
 
 def seed_role_permissions(db: Session) -> None:
-    """Insert default staff permissions if none exist."""
-    n = db.query(RolePermission).filter(RolePermission.role == ROLE_STAFF).count()
-    if n > 0:
+    """Insert default staff permissions if none exist; add rows for new modules on upgrade."""
+    existing = {r.module_key for r in db.query(RolePermission).filter(RolePermission.role == ROLE_STAFF).all()}
+    defaults = {k: (cr, cw) for k, cr, cw in _default_staff_permissions() if k in MODULE_KEYS}
+    if not existing:
+        for key, (cr, cw) in defaults.items():
+            db.add(RolePermission(role=ROLE_STAFF, module_key=key, can_read=cr, can_write=cw))
+        db.commit()
         return
-    for key, cr, cw in _default_staff_permissions():
-        if key not in MODULE_KEYS:
-            continue
-        db.add(RolePermission(role=ROLE_STAFF, module_key=key, can_read=cr, can_write=cw))
+    for key, (cr, cw) in defaults.items():
+        if key not in existing:
+            db.add(RolePermission(role=ROLE_STAFF, module_key=key, can_read=cr, can_write=cw))
     db.commit()
 
 

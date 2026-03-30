@@ -1,0 +1,371 @@
+{% extends "base.html" %}
+{% block title %}{% if is_edit %}Edit LC case{% else %}New LC case{% endif %} — ZoningPro{% endblock %}
+{% block content %}
+{% set c = case_row %}
+{% set p = prefill or {} %}
+<nav class="mb-4 flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
+  <a href="/" class="hover:text-primary">Overview</a>
+  <span class="material-symbols-outlined text-xs">chevron_right</span>
+  <a href="/locational-clearance/" class="hover:text-primary">Locational clearance</a>
+  <span class="material-symbols-outlined text-xs">chevron_right</span>
+  <span class="font-semibold text-primary">{% if is_edit %}Edit{% else %}New{% endif %}</span>
+</nav>
+
+<div class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+  <div>
+    <h1 class="mb-2 text-4xl font-extrabold tracking-tight text-on-surface">{% if is_edit %}Edit LC case{% else %}New LC case{% endif %}</h1>
+    <p class="max-w-2xl text-on-surface-variant">LC Form 1 (application), Form 2 (decision), and Form 03 (zoning certification). Applicant data is shared with the rest of the app.</p>
+  </div>
+  {% if is_edit and c %}
+  <div class="flex flex-wrap gap-2">
+    <a href="/locational-clearance/{{ c.id }}/print/application" target="_blank" class="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant/20 bg-surface-container-low px-4 py-2 text-sm font-semibold text-on-surface hover:bg-surface-container-high">Form 1</a>
+    <a href="/locational-clearance/{{ c.id }}/print/decision" target="_blank" class="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant/20 bg-surface-container-low px-4 py-2 text-sm font-semibold text-on-surface hover:bg-surface-container-high">Form 2</a>
+    <a href="/locational-clearance/{{ c.id }}/print/certification" target="_blank" class="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant/20 bg-surface-container-low px-4 py-2 text-sm font-semibold text-on-surface hover:bg-surface-container-high">Form 03</a>
+  </div>
+  {% endif %}
+</div>
+
+<form method="post" action="{% if is_edit %}/locational-clearance/{{ c.id }}{% else %}/locational-clearance/new{% endif %}" class="space-y-10 rounded-xl border border-outline-variant/10 bg-surface-container-lowest p-6 shadow-sm lg:p-10">
+  <input type="hidden" name="existing_applicant_id" id="existing-applicant-id" value="{{ prefill_existing_applicant_id }}" />
+  <input type="hidden" name="lc_application_id" value="{% if c and c.lc_application_id %}{{ c.lc_application_id }}{% elif prefill_lc_application_id %}{{ prefill_lc_application_id }}{% endif %}" />
+
+  <section class="space-y-6">
+    <h2 class="flex items-center gap-2 text-lg font-bold text-primary"><span class="material-symbols-outlined">badge</span> Receipt &amp; control</h2>
+    <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Application no.</label>
+        <input name="application_number" value="{{ c.application_number if c else (p.application_number or '') }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" placeholder="e.g. 2025-045-I" />
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Date of receipt</label>
+        <input type="date" name="date_of_receipt" value="{% if c and c.date_of_receipt %}{{ c.date_of_receipt.isoformat() }}{% elif p.date_of_receipt %}{{ p.date_of_receipt }}{% endif %}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">O.R. no.</label>
+        <input name="or_number" value="{{ c.or_number or '' if c else '' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">O.R. / issue date</label>
+        <input type="date" name="or_date" value="{% if c and c.or_date %}{{ c.or_date.isoformat() }}{% elif p.or_date %}{{ p.or_date }}{% endif %}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Amount paid (Php)</label>
+        <input name="amount_paid" value="{% if c and c.amount_paid is not none %}{{ c.amount_paid }}{% endif %}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" placeholder="0" />
+      </div>
+    </div>
+  </section>
+
+  <section class="space-y-6">
+    <h2 class="flex items-center gap-2 text-lg font-bold text-primary"><span class="material-symbols-outlined">person</span> Applicant</h2>
+    <p class="text-xs text-on-surface-variant">Search works like the LC intake form. Prefill from an LC fee application: <code class="rounded bg-surface-container-high px-1">/locational-clearance/new?lc_application=ID</code></p>
+    <div class="relative space-y-1">
+      <label class="block text-sm font-semibold text-on-surface-variant" for="applicant-search-input">Find existing applicant</label>
+      <input type="search" id="applicant-search-input" autocomplete="off" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary" placeholder="Type at least 2 letters…" />
+      <ul id="applicant-suggest-list" class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-auto rounded-lg border border-outline-variant/20 bg-white py-1 shadow-lg" role="listbox" hidden></ul>
+    </div>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">First name *</label>
+        <input name="applicant_first_name" id="applicant-first-name" required value="{{ reuse_applicant.first_name if reuse_applicant else '' }}" class="applicant-name-field w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Last name *</label>
+        <input name="applicant_last_name" id="applicant-last-name" required value="{{ reuse_applicant.last_name if reuse_applicant else '' }}" class="applicant-name-field w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Middle name</label>
+        <input name="applicant_middle_name" id="applicant-middle-name" value="{{ reuse_applicant.middle_name or '' if reuse_applicant else '' }}" class="applicant-name-field w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Suffix</label>
+        <input name="applicant_suffix" id="applicant-suffix" value="{{ reuse_applicant.suffix or '' if reuse_applicant else '' }}" class="applicant-name-field w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+    </div>
+    <div class="space-y-2">
+      <label class="block text-sm font-semibold text-on-surface-variant">Name of corporation (if any)</label>
+      <input name="corporation_name" value="{{ c.corporation_name or '' if c else '' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+    </div>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Address of applicant *</label>
+        <textarea name="applicant_address" required rows="2" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">{% if c %}{{ c.applicant_address }}{% elif p.applicant_address %}{{ p.applicant_address }}{% endif %}</textarea>
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Address of corporation</label>
+        <textarea name="corporation_address" rows="2" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">{% if c %}{{ c.corporation_address or '' }}{% elif p.corporation_address %}{{ p.corporation_address }}{% endif %}</textarea>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Authorized representative</label>
+        <input name="authorized_representative_name" value="{{ c.authorized_representative_name or '' if c else '' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Address of representative</label>
+        <textarea name="authorized_representative_address" rows="2" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">{{ c.authorized_representative_address or '' if c else '' }}</textarea>
+      </div>
+    </div>
+  </section>
+
+  <section class="space-y-6">
+    <h2 class="flex items-center gap-2 text-lg font-bold text-primary"><span class="material-symbols-outlined">construction</span> Project (Form 1)</h2>
+    <div class="space-y-2">
+      <label class="block text-sm font-semibold text-on-surface-variant">Project type / title *</label>
+      <input name="project_title" required value="{{ c.project_title if c else (p.project_title or '') }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+    </div>
+    <div class="space-y-2">
+      <label class="block text-sm font-semibold text-on-surface-variant">Project location</label>
+      <textarea name="project_location" rows="2" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">{% if c %}{{ c.project_location or '' }}{% elif p.project_location %}{{ p.project_location }}{% endif %}</textarea>
+    </div>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Lot area (sq.m.)</label>
+        <input name="lot_area_sqm" value="{% if c and c.lot_area_sqm is not none %}{{ c.lot_area_sqm }}{% elif p.lot_area_sqm is defined and p.lot_area_sqm is not none %}{{ p.lot_area_sqm }}{% endif %}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Building area (sq.m.)</label>
+        <input name="building_area_sqm" value="{% if c and c.building_area_sqm is not none %}{{ c.building_area_sqm }}{% endif %}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+    </div>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Project nature</label>
+        <select name="project_nature" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">
+          <option value="">—</option>
+          <option value="new_development" {% if c and c.project_nature == 'new_development' %}selected{% endif %}>New development</option>
+          <option value="improvement" {% if c and c.project_nature == 'improvement' %}selected{% endif %}>Improvement</option>
+          <option value="others" {% if c and c.project_nature == 'others' %}selected{% endif %}>Others</option>
+        </select>
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">If others, specify</label>
+        <input name="project_nature_other" value="{{ c.project_nature_other or '' if c else '' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+    </div>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Right over land</label>
+        <select name="right_over_land" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">
+          <option value="">—</option>
+          <option value="owner" {% if c and c.right_over_land == 'owner' %}selected{% endif %}>Owner</option>
+          <option value="lessee" {% if c and c.right_over_land == 'lessee' %}selected{% endif %}>Lessee</option>
+          <option value="other" {% if c and c.right_over_land == 'other' %}selected{% endif %}>Other</option>
+        </select>
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">If other, specify</label>
+        <input name="right_over_land_other" value="{{ c.right_over_land_other or '' if c else '' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Project nature (duration)</label>
+        <select name="land_use_duration" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">
+          <option value="">—</option>
+          <option value="permanent" {% if c and c.land_use_duration == 'permanent' %}selected{% endif %}>Permanent</option>
+          <option value="temporary" {% if c and c.land_use_duration == 'temporary' %}selected{% endif %}>Temporary</option>
+        </select>
+      </div>
+    </div>
+    <div class="space-y-2">
+      <label class="block text-sm font-semibold text-on-surface-variant">Existing land use of project site</label>
+      <input name="existing_land_use" value="{{ c.existing_land_use or '' if c else '' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" placeholder="e.g. Institutional" />
+    </div>
+    <div class="space-y-2">
+      <label class="block text-sm font-semibold text-on-surface-variant">Project cost (words)</label>
+      <textarea name="project_cost_words" rows="2" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">{{ c.project_cost_words or '' if c else '' }}</textarea>
+    </div>
+    <div class="space-y-2">
+      <label class="block text-sm font-semibold text-on-surface-variant">Project cost (figures)</label>
+      <input name="project_cost_amount" value="{% if c and c.project_cost_amount is not none %}{{ c.project_cost_amount }}{% elif p.project_cost_amount is defined and p.project_cost_amount is not none %}{{ p.project_cost_amount }}{% endif %}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+    </div>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Subject to LC notice? (Yes/No)</label>
+        <select name="lc_notice_required" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">
+          <option value="">—</option>
+          <option value="1" {% if c and c.lc_notice_required == true %}selected{% endif %}>Yes</option>
+          <option value="0" {% if c and c.lc_notice_required == false %}selected{% endif %}>No</option>
+        </select>
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">If yes — date(s) filed</label>
+        <input name="lc_notice_dates_filed" value="{{ c.lc_notice_dates_filed or '' if c else '' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+    </div>
+    <div class="space-y-2">
+      <label class="block text-sm font-semibold text-on-surface-variant">If yes — action(s) taken</label>
+      <input name="lc_notice_actions" value="{{ c.lc_notice_actions or '' if c else '' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+    </div>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Release of decision</label>
+        <select name="release_mode" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">
+          <option value="">—</option>
+          <option value="pickup" {% if c and c.release_mode == 'pickup' %}selected{% endif %}>Pick-up</option>
+          <option value="mail" {% if c and c.release_mode == 'mail' %}selected{% endif %}>By mail</option>
+        </select>
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">If mail — to</label>
+        <select name="release_mail_to" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">
+          <option value="">—</option>
+          <option value="applicant" {% if c and c.release_mail_to == 'applicant' %}selected{% endif %}>Applicant</option>
+          <option value="authorized_rep" {% if c and c.release_mail_to == 'authorized_rep' %}selected{% endif %}>Authorized representative</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <section class="space-y-6">
+    <h2 class="flex items-center gap-2 text-lg font-bold text-primary"><span class="material-symbols-outlined">gavel</span> Decision (Form 2)</h2>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Decision no.</label>
+        <input name="decision_number" value="{{ c.decision_number or '' if c else '' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Decision date</label>
+        <input type="date" name="decision_date" value="{% if c and c.decision_date %}{{ c.decision_date.isoformat() }}{% endif %}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+    </div>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Outcome</label>
+        <select name="decision_outcome" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">
+          <option value="">—</option>
+          <option value="granted" {% if c and c.decision_outcome == 'granted' %}selected{% endif %}>Locational clearance granted</option>
+          <option value="denied" {% if c and c.decision_outcome == 'denied' %}selected{% endif %}>Denied</option>
+        </select>
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Decision headline (printed)</label>
+        <input name="decision_headline" value="{{ c.decision_headline or 'LOCATIONAL CLEARANCE GRANTED' if c else 'LOCATIONAL CLEARANCE GRANTED' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+    </div>
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">TCT / OCT no.</label>
+        <input name="tct_oct_number" value="{{ c.tct_oct_number or '' if c else '' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Zoning classification</label>
+        <input name="zoning_classification" value="{{ c.zoning_classification or '' if c else '' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+    </div>
+    <div class="space-y-2">
+      <label class="block text-sm font-semibold text-on-surface-variant">Additional conditions / requirements</label>
+      <textarea name="additional_conditions" rows="4" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">{{ c.additional_conditions or '' if c else '' }}</textarea>
+    </div>
+  </section>
+
+  <section class="space-y-6">
+    <h2 class="flex items-center gap-2 text-lg font-bold text-primary"><span class="material-symbols-outlined">verified</span> Zoning certification (Form 03)</h2>
+    <div class="space-y-2">
+      <label class="block text-sm font-semibold text-on-surface-variant">Parcel(s) situated at</label>
+      <textarea name="cert_parcel_location" rows="2" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" placeholder="Full address / lot description">{% if c %}{{ c.cert_parcel_location or '' }}{% elif p.project_location %}{{ p.project_location }}{% endif %}</textarea>
+    </div>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Area in words</label>
+        <input name="cert_area_words" value="{{ c.cert_area_words or '' if c else '' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Registered owner (certification table)</label>
+        <input name="cert_registered_owner" value="{{ c.cert_registered_owner or '' if c else '' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+    </div>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Lot no.(s)</label>
+        <input name="cert_lot_numbers" value="{{ c.cert_lot_numbers or '' if c else '' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Certification issued to</label>
+        <input name="cert_issued_to" value="{{ c.cert_issued_to or '' if c else '' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" placeholder="Defaults to applicant or corporation if empty" />
+      </div>
+    </div>
+    <div class="space-y-2">
+      <label class="block text-sm font-semibold text-on-surface-variant">Purpose / supporting project line</label>
+      <textarea name="cert_purpose" rows="2" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">{% if c %}{{ c.cert_purpose or '' }}{% elif p.project_title %}{{ p.project_title }}{% endif %}</textarea>
+    </div>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Certification date</label>
+        <input type="date" name="cert_date" value="{% if c and c.cert_date %}{{ c.cert_date.isoformat() }}{% elif p.or_date %}{{ p.or_date }}{% endif %}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+      <div class="space-y-2">
+        <label class="block text-sm font-semibold text-on-surface-variant">Place</label>
+        <input name="cert_place" value="{{ c.cert_place or 'Binalbagan, Negros Occidental' if c else 'Binalbagan, Negros Occidental' }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      </div>
+    </div>
+  </section>
+
+  <div class="flex flex-wrap gap-3 border-t border-outline-variant/10 pt-8">
+    <button type="submit" class="rounded-xl bg-primary px-8 py-3 text-sm font-bold text-on-primary shadow-md hover:opacity-90">Save</button>
+    <a href="/locational-clearance/" class="rounded-xl border border-outline-variant/20 px-8 py-3 text-sm font-semibold text-on-surface hover:bg-surface-container-high">Cancel</a>
+  </div>
+</form>
+
+<script>
+(function () {
+  const input = document.getElementById("applicant-search-input");
+  const list = document.getElementById("applicant-suggest-list");
+  const hiddenId = document.getElementById("existing-applicant-id");
+  const first = document.getElementById("applicant-first-name");
+  const last = document.getElementById("applicant-last-name");
+  const mid = document.getElementById("applicant-middle-name");
+  const suf = document.getElementById("applicant-suffix");
+  let t = null;
+  function hide() {
+    list.classList.add("hidden");
+    list.hidden = true;
+    list.innerHTML = "";
+  }
+  function show(items) {
+    list.innerHTML = "";
+    items.forEach(function (it) {
+      const li = document.createElement("li");
+      li.setAttribute("role", "option");
+      li.className = "cursor-pointer px-4 py-2 text-sm hover:bg-slate-100";
+      li.textContent = it.label;
+      li.addEventListener("mousedown", function (e) {
+        e.preventDefault();
+        hiddenId.value = String(it.id);
+        if (first) first.value = it.first_name || "";
+        if (last) last.value = it.last_name || "";
+        if (mid) mid.value = it.middle_name || "";
+        if (suf) suf.value = it.suffix || "";
+        hide();
+        input.value = "";
+      });
+      list.appendChild(li);
+    });
+    list.classList.remove("hidden");
+    list.hidden = false;
+  }
+  input.addEventListener("input", function () {
+    const q = input.value.trim();
+    clearTimeout(t);
+    if (q.length < 2) {
+      hide();
+      return;
+    }
+    t = setTimeout(function () {
+      fetch("/api/applicants/suggest?q=" + encodeURIComponent(q), { credentials: "same-origin" })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          var arr = Array.isArray(data) ? data : [];
+          if (arr.length) {
+            show(arr.map(function (it) {
+              return { id: it.id, label: it.display_name || "", first_name: it.first_name, last_name: it.last_name, middle_name: it.middle_name, suffix: it.suffix };
+            }));
+          } else hide();
+        })
+        .catch(function () { hide(); });
+    }, 200);
+  });
+  document.addEventListener("click", function (e) {
+    if (!list.contains(e.target) && e.target !== input) hide();
+  });
+})();
+</script>
+{% endblock %}

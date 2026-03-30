@@ -42,3 +42,11 @@ def test_permissions_page_admin():
         r = client.get("/permissions")
     assert r.status_code == 200
     assert b"Role permissions" in r.content
+
+
+def test_locational_clearance_list_admin():
+    with TestClient(app) as client:
+        _login(client)
+        r = client.get("/locational-clearance/")
+    assert r.status_code == 200
+    assert b"Locational clearance" in r.content

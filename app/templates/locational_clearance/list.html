@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Locational clearance — ZoningPro{% endblock %}
+{% block content %}
+<nav class="mb-4 flex items-center gap-2 text-sm text-on-surface-variant">
+  <a href="/" class="hover:text-primary">Overview</a>
+  <span class="material-symbols-outlined text-xs">chevron_right</span>
+  <span class="font-semibold text-primary">Locational clearance</span>
+</nav>
+<header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+  <div>
+    <h1 class="mb-2 text-4xl font-extrabold tracking-tight text-on-surface">Locational clearance</h1>
+    <p class="max-w-2xl text-on-surface-variant">LC Form 1 (application), Form 2 (decision), and Form 03 (zoning certification). Open a case to edit or print.</p>
+  </div>
+  {% if permissions.locational_clearance.write %}
+  <a href="/locational-clearance/new" class="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-on-primary shadow-md hover:opacity-90">
+    <span class="material-symbols-outlined">add</span>
+    New LC case
+  </a>
+  {% endif %}
+</header>
+
+<div class="overflow-hidden rounded-xl border border-outline-variant/10 bg-surface-container-lowest shadow-sm">
+  <table class="w-full min-w-[640px] text-left text-sm">
+    <thead class="border-b border-outline-variant/10 bg-surface-container-high/50">
+      <tr>
+        <th class="px-6 py-4 font-semibold">Application no.</th>
+        <th class="px-4 py-4 font-semibold">Applicant</th>
+        <th class="px-4 py-4 font-semibold">Project</th>
+        <th class="w-36 px-4 py-4 font-semibold">Receipt</th>
+        <th class="w-28 px-4 py-4"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-outline-variant/10">
+      {% for row in cases %}
+      <tr class="hover:bg-surface-container-low/50">
+        <td class="px-6 py-4 font-mono text-sm">{{ row.application_number or "—" }}</td>
+        <td class="px-4 py-4">{{ row.applicant_line }}</td>
+        <td class="px-4 py-4 text-on-surface-variant">{{ (row.project_title or "")[:80] }}{% if row.project_title and row.project_title|length > 80 %}…{% endif %}</td>
+        <td class="px-4 py-4 text-on-surface-variant">{% if row.date_of_receipt %}{{ row.date_of_receipt.strftime("%Y-%m-%d") }}{% else %}—{% endif %}</td>
+        <td class="px-4 py-4 text-right">
+          <a href="/locational-clearance/{{ row.id }}" class="font-semibold text-primary hover:underline">Open</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="px-6 py-12 text-center text-on-surface-variant">No cases yet. {% if permissions.locational_clearance.write %}Create a <a href="/locational-clearance/new" class="font-semibold text-primary hover:underline">new LC case</a>.{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

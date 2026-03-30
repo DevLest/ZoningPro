@@ -45,6 +45,7 @@ class Applicant(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     applications: Mapped[list[LCApplication]] = relationship(back_populates="applicant")
+    locational_clearance_cases: Mapped[list["LocationalClearanceCase"]] = relationship(back_populates="applicant")
 
     @property
     def display_name(self) -> str:
@@ -86,8 +87,96 @@ class LCApplication(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    locational_clearance_cases: Mapped[list["LocationalClearanceCase"]] = relationship(back_populates="lc_application")
+
     @property
     def applicant_display_name(self) -> str:
         if self.applicant is None:
             return "—"
         return self.applicant.display_name
+
+
+class LocationalClearanceCase(Base):
+    """LC Form 1 (application), Form 2 (decision), and Form 03 (zoning certification) — one saved case."""
+
+    __tablename__ = "locational_clearance_cases"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    applicant_id: Mapped[int] = mapped_column(ForeignKey("applicants.id"), index=True)
+    applicant: Mapped[Applicant] = relationship(back_populates="locational_clearance_cases")
+    #: Optional link to an LC fee/estimate record when the same project exists in both workflows.
+    lc_application_id: Mapped[int | None] = mapped_column(ForeignKey("lc_applications.id"), nullable=True, index=True)
+    lc_application: Mapped[LCApplication | None] = relationship(back_populates="locational_clearance_cases")
+
+    application_number: Mapped[str] = mapped_column(String(64), default="")
+    date_of_receipt: Mapped[date | None] = mapped_column(Date(), nullable=True)
+    or_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    or_date: Mapped[date | None] = mapped_column(Date(), nullable=True)
+    amount_paid: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    corporation_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    applicant_address: Mapped[str] = mapped_column(String(512), default="")
+    corporation_address: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    authorized_representative_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    authorized_representative_address: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    project_title: Mapped[str] = mapped_column(String(512), default="")
+    project_location: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    lot_area_sqm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    building_area_sqm: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    #: new_development | improvement | others
+    project_nature: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    project_nature_other: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    #: owner | lessee | other
+    right_over_land: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    right_over_land_other: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    #: permanent | temporary
+    land_use_duration: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    existing_land_use: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    project_cost_words: Mapped[str | None] = mapped_column(Text, nullable=True)
+    project_cost_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    lc_notice_required: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    lc_notice_dates_filed: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    lc_notice_actions: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
+    #: pickup | mail
+    release_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    #: applicant | authorized_rep (when release_mode is mail)
+    release_mail_to: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    decision_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    decision_date: Mapped[date | None] = mapped_column(Date(), nullable=True)
+    #: granted | denied
+    decision_outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    decision_headline: Mapped[str | None] = mapped_column(String(256), nullable=True)
+
+    tct_oct_number: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    zoning_classification: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    cert_parcel_location: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cert_area_words: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    cert_registered_owner: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    cert_lot_numbers: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    cert_issued_to: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    cert_purpose: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cert_date: Mapped[date | None] = mapped_column(Date(), nullable=True)
+    cert_place: Mapped[str | None] = mapped_column(String(256), nullable=True)
+
+    additional_conditions: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @property
+    def applicant_line(self) -> str:
+        """Line for Form 1/2 field 1 — natural person or organization from applicant record."""
+        if self.applicant is None:
+            return ""
+        return self.applicant.display_name
+
+    @property
+    def corporation_line(self) -> str:
+        return (self.corporation_name or "").strip() or self.applicant_line
