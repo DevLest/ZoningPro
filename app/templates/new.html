@@ -148,6 +148,8 @@
         ></ul>
       </div>
       <p id="address-suggest-attrib" class="hidden text-xs text-on-surface-variant/70"></p>
+      <input type="hidden" name="address_lat" id="address-lat" value="" />
+      <input type="hidden" name="address_lon" id="address-lon" value="" />
     </div>
     <div class="space-y-2">
       <label class="block text-sm font-semibold tracking-wide text-on-surface-variant">Name of Project</label>
@@ -221,6 +223,59 @@
   var minChars = 3;
   var timer = null;
   var activeIndex = -1;
+  var lastSuggestItems = [];
+
+  function clearAddressCoords() {
+    var la = document.getElementById("address-lat");
+    var lo = document.getElementById("address-lon");
+    if (la) la.value = "";
+    if (lo) lo.value = "";
+  }
+
+  function setAddressCoords(lat, lon) {
+    var la = document.getElementById("address-lat");
+    var lo = document.getElementById("address-lon");
+    if (la) la.value = lat != null && lat !== "" ? String(lat) : "";
+    if (lo) lo.value = lon != null && lon !== "" ? String(lon) : "";
+  }
+
+  function finishAddressPick() {
+    hideList();
+    if (attrib) attrib.classList.add("hidden");
+  }
+
+  function applyAddressPick(item) {
+    if (!item) return;
+    input.value = item.value || item.label;
+    if (
+      item.lat != null &&
+      item.lon != null &&
+      !isNaN(parseFloat(item.lat)) &&
+      !isNaN(parseFloat(item.lon))
+    ) {
+      setAddressCoords(item.lat, item.lon);
+      finishAddressPick();
+      return;
+    }
+    if (item.place_id) {
+      clearAddressCoords();
+      finishAddressPick();
+      fetch("/api/google-place-details?place_id=" + encodeURIComponent(item.place_id), {
+        credentials: "same-origin",
+      })
+        .then(function (r) {
+          if (!r.ok) throw new Error("bad");
+          return r.json();
+        })
+        .then(function (j) {
+          if (j.lat != null && j.lon != null) setAddressCoords(j.lat, j.lon);
+        })
+        .catch(function () {});
+      return;
+    }
+    clearAddressCoords();
+    finishAddressPick();
+  }
 
   function hideList() {
     list.classList.add("hidden");
@@ -244,6 +299,7 @@
   }
 
   function renderItems(items, provider) {
+    lastSuggestItems = items || [];
     list.innerHTML = "";
     items.forEach(function (item, i) {
       var li = document.createElement("li");
@@ -254,9 +310,7 @@
       li.textContent = item.label || item.value;
       li.addEventListener("mousedown", function (e) {
         e.preventDefault();
-        input.value = item.value || item.label;
-        hideList();
-        attrib.classList.add("hidden");
+        applyAddressPick(item);
       });
       list.appendChild(li);
     });
@@ -293,6 +347,7 @@
   }
 
   input.addEventListener("input", function () {
+    clearAddressCoords();
     if (timer) clearTimeout(timer);
     timer = setTimeout(fetchSuggestions, debounceMs);
   });
@@ -310,7 +365,7 @@
       updateActive(opts);
     } else if (e.key === "Enter" && activeIndex >= 0) {
       e.preventDefault();
-      opts[activeIndex].dispatchEvent(new MouseEvent("mousedown"));
+      applyAddressPick(lastSuggestItems[activeIndex]);
     } else if (e.key === "Escape") {
       hideList();
       attrib.classList.add("hidden");

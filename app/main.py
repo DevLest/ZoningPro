@@ -31,7 +31,7 @@ from app.config import EXPORTS_DIR, PROJECT_ROOT, SECRET_KEY
 from app.doc_requirements import normalize_doc_requirements_post
 from app.db import SessionLocal, get_db, init_db
 from app.export_excel import export_lc_workbook
-from app.geocode import address_suggestions
+from app.geocode import address_suggestions, forward_geocode_address, google_place_coordinates
 from app.fees import TEMPLATE_REGISTRY, compute_fees, list_categories, suggest_template
 from app.fees.registry import get_template
 from app.models import Applicant, LCApplication, RolePermission, User
@@ -504,6 +504,24 @@ def _parse_date(s: str | None) -> date | None:
     return datetime.strptime(s.strip(), "%Y-%m-%d").date()
 
 
+def _parse_optional_float(s: str | None) -> float | None:
+    t = (s or "").strip()
+    if not t:
+        return None
+    try:
+        return float(t)
+    except ValueError:
+        return None
+
+
+def _sanitize_lat_lon(lat: float | None, lon: float | None) -> tuple[float | None, float | None]:
+    if lat is None or lon is None:
+        return None, None
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        return None, None
+    return lat, lon
+
+
 def _parse_surcharge_override(raw: str, computed_surcharge: float) -> float | None:
     """Empty or same-as-computed clears manual override (use formula)."""
     s = (raw or "").strip()
@@ -594,6 +612,32 @@ def api_address_suggest(
     """Autocomplete for applicant address (Nominatim by default, or Google Places if key is set)."""
     suggestions, provider = address_suggestions(q, limit=8)
     return {"suggestions": suggestions, "provider": provider}
+
+
+@app.get("/api/google-place-details")
+def api_google_place_details(
+    place_id: str = Query("", max_length=512),
+    _user: User = Depends(require_applications_read),
+):
+    """Lat/lon for a Google Places prediction (after user selects a suggestion)."""
+    t = google_place_coordinates(place_id.strip())
+    if t is None:
+        return {"lat": None, "lon": None}
+    lat, lon = t
+    return {"lat": lat, "lon": lon}
+
+
+@app.get("/api/geocode-forward")
+def api_geocode_forward(
+    q: str = Query("", max_length=512),
+    _user: User = Depends(require_applications_read),
+):
+    """Approximate coordinates for a full address (Nominatim first hit). Map preview when no pin saved."""
+    t = forward_geocode_address(q)
+    if t is None:
+        return {"lat": None, "lon": None}
+    lat, lon = t
+    return {"lat": lat, "lon": lon}
 
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -757,6 +801,8 @@ def new_application_post(
     applicant_suffix: str = Form(""),
     existing_applicant_id: str = Form(""),
     address: str = Form(...),
+    address_lat: str = Form(""),
+    address_lon: str = Form(""),
     project_name: str = Form(""),
     project_location: str = Form(""),
     doc_requirements: str = Form(""),
@@ -776,11 +822,14 @@ def new_application_post(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    la, lo = _sanitize_lat_lon(_parse_optional_float(address_lat), _parse_optional_float(address_lon))
     row = LCApplication(
         lc_ctrl_no=lc_ctrl_no.strip(),
         date_of_application=_parse_date(date_of_application) or date.today(),
         applicant_id=ap.id,
         address=address.strip(),
+        address_lat=la,
+        address_lon=lo,
         project_name=project_name.strip() or None,
         project_location=project_location.strip() or None,
         doc_requirements=normalize_doc_requirements_post(doc_requirements),

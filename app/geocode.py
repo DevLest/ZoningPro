@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 NOMINATIM_SEARCH = "https://nominatim.openstreetmap.org/search"
 PHOTON_SEARCH = "https://photon.komoot.io/api/"
 GOOGLE_AUTOCOMPLETE = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
+GOOGLE_PLACE_DETAILS = "https://maps.googleapis.com/maps/api/place/details/json"
 
 
 # If the user names another Negros locality (or already says Binalbagan), do not append the LGU suffix.
@@ -71,10 +72,10 @@ def _geocode_query(raw: str) -> str:
     return f"{q}{ADDRESS_SEARCH_SUFFIX}"
 
 
-def address_suggestions(query: str, *, limit: int = 8) -> tuple[list[dict[str, str]], str]:
+def address_suggestions(query: str, *, limit: int = 8) -> tuple[list[dict[str, Any]], str]:
     """
-    Returns (suggestions, provider) where each suggestion has keys: label, value.
-    provider is 'osm' (Nominatim + Photon), 'google', or 'none'.
+    Returns (suggestions, provider). Each suggestion has label, value, and optionally
+    lat/lon (floats) or place_id (Google — coordinates fetched via google_place_coordinates).
     """
     q = (query or "").strip()
     if len(q) < 3:
@@ -87,18 +88,19 @@ def address_suggestions(query: str, *, limit: int = 8) -> tuple[list[dict[str, s
     return _osm_combined_suggestions(gq, lim), "osm"
 
 
-def _dedupe_append(
-    out: list[dict[str, str]],
+def _dedupe_append_dict(
+    out: list[dict[str, Any]],
     seen: set[str],
-    label: str,
+    row: dict[str, Any],
     *,
     cap: int,
 ) -> None:
-    key = label.casefold().strip()
+    label = (row.get("label") or row.get("value") or "").strip()
+    key = label.casefold()
     if len(key) < 3 or key in seen or len(out) >= cap:
         return
     seen.add(key)
-    out.append({"label": label, "value": label})
+    out.append(row)
 
 
 def _parse_viewbox(vb: str) -> tuple[float, float, float, float] | None:
@@ -112,7 +114,7 @@ def _parse_viewbox(vb: str) -> tuple[float, float, float, float] | None:
     return (a, b, c, d)
 
 
-def _nominatim_suggestions(q: str, limit: int) -> list[dict[str, str]]:
+def _nominatim_suggestions(q: str, limit: int) -> list[dict[str, Any]]:
     """Country-scoped Nominatim search (single request per suggestion API call)."""
     params: dict[str, Any] = {
         "q": q,
@@ -137,11 +139,29 @@ def _nominatim_suggestions(q: str, limit: int) -> list[dict[str, str]]:
         logger.warning("Nominatim request failed: %s", e)
         return []
 
-    out: list[dict[str, str]] = []
+    out: list[dict[str, Any]] = []
     for row in data:
         disp = row.get("display_name")
-        if isinstance(disp, str) and disp.strip():
-            out.append({"label": disp.strip(), "value": disp.strip()})
+        if not isinstance(disp, str) or not disp.strip():
+            continue
+        la = lo = None
+        try:
+            if row.get("lat") is not None:
+                la = float(row["lat"])
+            if row.get("lon") is not None:
+                lo = float(row["lon"])
+        except (TypeError, ValueError, KeyError):
+            la, lo = None, None
+        s = disp.strip()
+        out.append(
+            {
+                "label": s,
+                "value": s,
+                "lat": la,
+                "lon": lo,
+                "place_id": "",
+            }
+        )
     return out
 
 
@@ -194,13 +214,12 @@ def _photon_label(props: dict[str, Any]) -> str | None:
     return ", ".join(parts)
 
 
-def _photon_suggestions(q: str, limit: int) -> list[dict[str, str]]:
+def _photon_suggestions(q: str, limit: int) -> list[dict[str, Any]]:
     vb = _parse_viewbox(PH_VIEWBOX)
     params: dict[str, Any] = {
         "q": q,
         "limit": limit,
         "lang": "en",
-        # Prefer matches near Binalbagan / Negros when the query is ambiguous.
         "lat": GEOCODE_BIAS_LAT,
         "lon": GEOCODE_BIAS_LON,
     }
@@ -222,7 +241,7 @@ def _photon_suggestions(q: str, limit: int) -> list[dict[str, str]]:
         return []
 
     feats = payload.get("features") or []
-    out: list[dict[str, str]] = []
+    out: list[dict[str, Any]] = []
     for f in feats:
         if not isinstance(f, dict):
             continue
@@ -230,33 +249,48 @@ def _photon_suggestions(q: str, limit: int) -> list[dict[str, str]]:
         if not isinstance(props, dict):
             continue
         label = _photon_label(props)
-        if label:
-            out.append({"label": label, "value": label})
+        if not label:
+            continue
+        la = lo = None
+        geom = f.get("geometry")
+        if isinstance(geom, dict):
+            coords = geom.get("coordinates")
+            if isinstance(coords, list) and len(coords) >= 2:
+                try:
+                    lo = float(coords[0])
+                    la = float(coords[1])
+                except (TypeError, ValueError):
+                    pass
+        out.append(
+            {
+                "label": label,
+                "value": label,
+                "lat": la,
+                "lon": lo,
+                "place_id": "",
+            }
+        )
     return out
 
 
-def _osm_combined_suggestions(q: str, limit: int) -> list[dict[str, str]]:
-    """
-    Merge Nominatim + Photon. Photon is listed first — it usually matches streets,
-    blocks/lots, and named subdivisions better than Nominatim alone for partial input.
-    """
-    # Over-fetch per source so merge can still fill `limit` after deduping.
+def _osm_combined_suggestions(q: str, limit: int) -> list[dict[str, Any]]:
+    """Merge Nominatim + Photon (Photon first)."""
     per = min(10, max(limit + 3, 8))
     nom = _nominatim_suggestions(q, per)
     pho = _photon_suggestions(q, per)
 
     seen_set: set[str] = set()
-    out: list[dict[str, str]] = []
+    out: list[dict[str, Any]] = []
 
     for row in pho:
-        _dedupe_append(out, seen_set, row["label"], cap=limit)
+        _dedupe_append_dict(out, seen_set, row, cap=limit)
     for row in nom:
-        _dedupe_append(out, seen_set, row["label"], cap=limit)
+        _dedupe_append_dict(out, seen_set, row, cap=limit)
 
     return out
 
 
-def _google_suggestions(q: str, limit: int) -> list[dict[str, str]]:
+def _google_suggestions(q: str, limit: int) -> list[dict[str, Any]]:
     assert GOOGLE_MAPS_API_KEY
     try:
         with httpx.Client(timeout=12.0) as client:
@@ -267,7 +301,6 @@ def _google_suggestions(q: str, limit: int) -> list[dict[str, str]]:
                     "key": GOOGLE_MAPS_API_KEY,
                     "components": "country:ph",
                     "language": "en",
-                    # Bias toward Negros / Binalbagan so street + subdivision strings resolve locally.
                     "location": f"{GEOCODE_BIAS_LAT},{GEOCODE_BIAS_LON}",
                     "radius": GEOCODE_BIAS_RADIUS_M,
                 },
@@ -284,10 +317,74 @@ def _google_suggestions(q: str, limit: int) -> list[dict[str, str]]:
         return []
 
     preds = payload.get("predictions") or []
-    out: list[dict[str, str]] = []
+    out: list[dict[str, Any]] = []
     for p in preds[:limit]:
         desc = p.get("description")
-        if isinstance(desc, str) and desc.strip():
-            s = desc.strip()
-            out.append({"label": s, "value": s})
+        if not isinstance(desc, str) or not desc.strip():
+            continue
+        s = desc.strip()
+        pid = p.get("place_id") if isinstance(p.get("place_id"), str) else ""
+        out.append(
+            {
+                "label": s,
+                "value": s,
+                "lat": None,
+                "lon": None,
+                "place_id": pid,
+            }
+        )
     return out
+
+
+def google_place_coordinates(place_id: str) -> tuple[float, float] | None:
+    """Resolve Place Details coordinates (Google)."""
+    if not GOOGLE_MAPS_API_KEY:
+        return None
+    pid = (place_id or "").strip()
+    if not pid:
+        return None
+    try:
+        with httpx.Client(timeout=12.0) as client:
+            r = client.get(
+                GOOGLE_PLACE_DETAILS,
+                params={
+                    "place_id": pid,
+                    "fields": "geometry/location",
+                    "key": GOOGLE_MAPS_API_KEY,
+                },
+            )
+            r.raise_for_status()
+            payload = r.json()
+    except (httpx.HTTPError, ValueError) as e:
+        logger.warning("Google Place Details failed: %s", e)
+        return None
+
+    status = payload.get("status")
+    if status != "OK":
+        return None
+    loc = (payload.get("result") or {}).get("geometry", {}).get("location") or {}
+    try:
+        lat = float(loc.get("lat"))
+        lng = float(loc.get("lng"))
+    except (TypeError, ValueError):
+        return None
+    return lat, lng
+
+
+def forward_geocode_address(address: str) -> tuple[float, float] | None:
+    """First Nominatim hit for a full address (approximate map preview when no coords)."""
+    q = (address or "").strip()
+    if len(q) < 3:
+        return None
+    gq = _geocode_query(q)
+    rows = _nominatim_suggestions(gq, 1)
+    if not rows:
+        return None
+    r0 = rows[0]
+    la, lo = r0.get("lat"), r0.get("lon")
+    if la is None or lo is None:
+        return None
+    try:
+        return float(la), float(lo)
+    except (TypeError, ValueError):
+        return None

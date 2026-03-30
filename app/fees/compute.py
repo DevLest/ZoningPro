@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.fees.registry import get_template
-from app.settings_store import get_zoning_certification_price
+from app.settings_store import DEFAULT_ZONING_CERTIFICATION_PRICE, get_zoning_certification_price
 
 
 @dataclass
@@ -33,7 +33,7 @@ def compute_fees(
     *,
     zoning_cert_price: float | None = None,
 ) -> FeeResult:
-    """Compute fees. *zoning_cert_price* defaults to Settings → zoning certification amount (default ₱720)."""
+    """Compute fees. *zoning_cert_price* defaults to Settings → zoning certification amount."""
     zcp = float(zoning_cert_price) if zoning_cert_price is not None else get_zoning_certification_price()
     meta = get_template(template_id)
     cost = float(project_cost)
@@ -56,23 +56,26 @@ def compute_fees(
 
     elif template_id == "residential_100k_plus":
         ex = max(0.0, cost - 100_000.0)
-        lc = ex * 0.001 + 720.0
+        lc = ex * 0.001 + zcp
         sur = 0.0
-        zc = 400.0 * 38.0
+        # Workbook used 400×38 at the default zoning rate; scale if Settings differs.
+        zc = (400.0 * 38.0) * (zcp / DEFAULT_ZONING_CERTIFICATION_PRICE)
         b["excess_over_100k"] = ex
 
     elif template_id == "residential_200k_plus":
         # Matches Excel Residential-200K+: K17=excess over ₱200K, K18=K17*1%, K19=K18/10 (1 tenth),
-        # LC Fee (C18/P17) = 720 + K19 — same as 720 + (excess × 0.001).
+        # LC Fee (C18/P17) = base + K19 — same as base + (excess × 0.001) when base equals the configured rate.
         k17, k18, k19 = _excess_chain(cost, 200_000.0)
-        lc = 720.0 + k19
+        lc = zcp + k19
         sur = 0.0
         zc = zcp
         b["k17_excess_over_200k"] = k17
         b["k18_one_percent_of_excess"] = k18
         b["k19_one_tenth_of_one_percent"] = k19
         b["p17_lc_fee"] = lc
-        b["excel_note"] = "LC Fee = 720 + K19 (720 + one-tenth of 1% of excess over ₱200K)"
+        b["excel_note"] = (
+            f"LC Fee = {zcp} + K19 ({zcp} + one-tenth of 1% of excess over ₱200K)"
+        )
 
     elif template_id == "apartment_500k":
         lc = 2160.0

@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Assessment — {{ app.lc_ctrl_no }} — ZoningPro{% endblock %}
+{% block head_extra %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+{% endblock %}
 {% block content %}
 <header class="mb-10 flex flex-col justify-between gap-4 md:flex-row md:items-end">
   <div>
@@ -234,6 +237,32 @@
           <span class="text-on-surface-variant">Project type</span>
           <span class="font-bold text-on-surface">{{ project_type_label }}</span>
         </div>
+      </div>
+    </div>
+    <div class="rounded-xl border border-outline-variant/10 bg-surface-container-low p-6">
+      <h3 class="mb-3 text-sm font-bold uppercase tracking-widest text-on-surface-variant">Location map</h3>
+      <div
+        id="assessment-map-wrap"
+        class="space-y-2"
+        data-lat="{% if app.address_lat is not none %}{{ app.address_lat }}{% endif %}"
+        data-lon="{% if app.address_lon is not none %}{{ app.address_lon }}{% endif %}"
+        data-address="{{ app.address|e }}"
+      >
+        <div id="assessment-map" class="relative z-0 h-48 w-full overflow-hidden rounded-lg border border-outline-variant/20 bg-surface-container-highest"></div>
+        <p class="text-xs text-on-surface-variant">
+          {% if app.address_lat is not none and app.address_lon is not none %}
+          Pin from address suggestion on intake (approximate).
+          {% else %}
+          No saved coordinates. Use address suggestions on new application to store a pin, or try an approximate lookup.
+          {% endif %}
+        </p>
+        <button
+          type="button"
+          id="assessment-map-try-geocode"
+          class="rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-xs font-bold text-primary hover:bg-surface-container {% if app.address_lat is not none and app.address_lon is not none %}hidden{% endif %}"
+        >
+          Approximate location
+        </button>
       </div>
     </div>
     <div class="rounded-xl border border-tertiary/20 bg-tertiary-container/10 p-6">
@@ -529,6 +558,68 @@
     resetLc.addEventListener("click", function () {
       lcIn.value = "";
       syncNow();
+    });
+  }
+})();
+</script>
+<script>
+(function () {
+  var wrap = document.getElementById("assessment-map-wrap");
+  var mapEl = document.getElementById("assessment-map");
+  var tryBtn = document.getElementById("assessment-map-try-geocode");
+  if (!wrap || !mapEl) return;
+
+  var savedLat = parseFloat(wrap.getAttribute("data-lat") || "");
+  var savedLon = parseFloat(wrap.getAttribute("data-lon") || "");
+  var address = wrap.getAttribute("data-address") || "";
+
+  function loadLeaflet(cb) {
+    if (window.L) {
+      cb();
+      return;
+    }
+    var s = document.createElement("script");
+    s.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    s.crossOrigin = "";
+    s.onload = cb;
+    document.body.appendChild(s);
+  }
+
+  function showMap(la, lo) {
+    loadLeaflet(function () {
+      var m = L.map(mapEl, { scrollWheelZoom: false }).setView([la, lo], 16);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      }).addTo(m);
+      L.marker([la, lo]).addTo(m);
+      setTimeout(function () {
+        m.invalidateSize();
+      }, 200);
+    });
+  }
+
+  if (!isNaN(savedLat) && !isNaN(savedLon)) {
+    showMap(savedLat, savedLon);
+  } else if (tryBtn) {
+    tryBtn.addEventListener("click", function () {
+      if (!address.trim()) return;
+      tryBtn.disabled = true;
+      fetch("/api/geocode-forward?q=" + encodeURIComponent(address), { credentials: "same-origin" })
+        .then(function (r) {
+          if (!r.ok) throw new Error("bad");
+          return r.json();
+        })
+        .then(function (j) {
+          if (j.lat != null && j.lon != null) {
+            showMap(j.lat, j.lon);
+            tryBtn.classList.add("hidden");
+          }
+        })
+        .catch(function () {})
+        .finally(function () {
+          tryBtn.disabled = false;
+        });
     });
   }
 })();

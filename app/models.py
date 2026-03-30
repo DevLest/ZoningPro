@@ -62,6 +62,9 @@ class LCApplication(Base):
     applicant_id: Mapped[int] = mapped_column(ForeignKey("applicants.id"), index=True)
     applicant: Mapped[Applicant] = relationship(back_populates="applications")
     address: Mapped[str] = mapped_column(String(512))
+    #: From address autocomplete (Nominatim/Photon/Google) when the user picks a suggestion.
+    address_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    address_lon: Mapped[float | None] = mapped_column(Float, nullable=True)
     project_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
     project_location: Mapped[str | None] = mapped_column(String(512), nullable=True)
     doc_requirements: Mapped[str | None] = mapped_column(Text, nullable=True)

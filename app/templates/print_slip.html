@@ -164,7 +164,7 @@
     {% if app.template_id == 'residential_200k_plus' %}
     <section class="scratchpad no-print mt-6 slip-outer bg-amber-50/80 p-4 font-mono text-[10px]">
       <p class="mb-2 font-sans text-xs font-bold text-slate-800">Excel worksheet check (columns K, L, M → LC Fee)</p>
-      <p class="mb-2 font-sans text-[10px] text-slate-600">Residential ₱200K+: K17 = project cost − ₱200,000 · K18 = K17 × 1% · K19 = K18 ÷ 10 (one-tenth) · <strong>LC Fee = 720 + K19</strong> (same as 720 + excess × 0.001)</p>
+      <p class="mb-2 font-sans text-[10px] text-slate-600">Residential ₱200K+: K17 = project cost − ₱200,000 · K18 = K17 × 1% · K19 = K18 ÷ 10 (one-tenth) · <strong>LC Fee = {{ "%.2f"|format(fee_computed.breakdown['zoning_certification_price']) }} + K19</strong> (same as configured base + excess × 0.001)</p>
       <div class="overflow-x-auto">
         <table class="w-full max-w-xl border-collapse border border-slate-500 bg-white">
           <thead>
@@ -193,7 +193,7 @@
             <tr class="bg-emerald-50 font-semibold">
               <td class="border border-slate-300 px-2 py-1">P17 / C18</td>
               <td class="border border-slate-300 px-2 py-1 text-right">{{ "%.2f"|format(fee_computed.breakdown['p17_lc_fee']) }}</td>
-              <td class="border border-slate-300 px-2 py-1 text-slate-700">LC Fee = 720 + K19</td>
+              <td class="border border-slate-300 px-2 py-1 text-slate-700">LC Fee = {{ "%.2f"|format(fee_computed.breakdown['zoning_certification_price']) }} + K19</td>
             </tr>
           </tbody>
         </table>

@@ -38,6 +38,10 @@ def _migrate_sqlite_schema() -> None:
             conn.execute(text("ALTER TABLE lc_applications ADD COLUMN waive_zoning_cert BOOLEAN NOT NULL DEFAULT 0"))
         if "lc_fee_override" not in cols:
             conn.execute(text("ALTER TABLE lc_applications ADD COLUMN lc_fee_override REAL"))
+        if "address_lat" not in cols:
+            conn.execute(text("ALTER TABLE lc_applications ADD COLUMN address_lat REAL"))
+        if "address_lon" not in cols:
+            conn.execute(text("ALTER TABLE lc_applications ADD COLUMN address_lon REAL"))
 
 
 def _migrate_users_roles() -> None:
