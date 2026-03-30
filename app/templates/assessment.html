@@ -11,13 +11,15 @@
   </div>
   <div class="flex flex-wrap items-center gap-3">
     <span id="fee-sync-status" class="min-h-[1.25rem] text-sm text-primary" aria-live="polite"></span>
-    <a
-      href="/applications/{{ app.id }}/pdf"
+    <button
+      type="button"
+      id="open-pdf-modal"
       class="bg-surface-container-high text-on-secondary-container inline-flex items-center gap-2 rounded-xl px-5 py-2.5 font-semibold transition-colors hover:bg-secondary-container"
     >
       <span class="material-symbols-outlined">picture_as_pdf</span>
-      Download PDF
-    </a>
+      View PDF
+    </button>
+    {% if permissions.applications.write %}
     <form method="post" action="/applications/{{ app.id }}/finalize" class="inline">
       <button
         type="submit"
@@ -27,8 +29,14 @@
         Save to record
       </button>
     </form>
+    {% endif %}
   </div>
 </header>
+{% if not permissions.applications.write %}
+<div class="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+  <strong>Read-only access.</strong> Fee values are shown for reference; your role cannot save changes to the record.
+</div>
+{% endif %}
 
 <div class="grid grid-cols-1 gap-8 lg:grid-cols-3">
   <div class="space-y-8 lg:col-span-2">
@@ -238,33 +246,146 @@
       </p>
     </div>
     <div class="flex flex-wrap gap-2">
-      <a
-        href="/applications/{{ app.id }}/print?copy=both"
-        target="_blank"
+      <button
+        type="button"
+        id="open-print-modal"
         class="rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-xs font-bold text-on-surface hover:bg-surface-container"
-        >Print both</a
       >
-      <a
-        href="/applications/{{ app.id }}/print?copy=owner"
-        target="_blank"
-        class="rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-xs font-bold text-on-surface hover:bg-surface-container"
-        >Owner's</a
-      >
-      <a
-        href="/applications/{{ app.id }}/print?copy=file"
-        target="_blank"
-        class="rounded-xl border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-xs font-bold text-on-surface hover:bg-surface-container"
-        >File copy</a
-      >
-      <a href="/applications/{{ app.id }}/classify" class="rounded-xl px-3 py-2 text-xs font-bold text-primary hover:underline">Edit classification</a>
+        Preview slip
+      </button>
+      {% if permissions.applications.write %}
+    <a href="/applications/{{ app.id }}/classify" class="rounded-xl px-3 py-2 text-xs font-bold text-primary hover:underline">Edit classification</a>
+    {% endif %}
     </div>
   </aside>
+</div>
+
+<div
+  id="print-slip-modal"
+  class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/50 p-4"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="print-slip-modal-title"
+>
+  <div class="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-outline-variant/20 bg-surface-container-lowest shadow-xl">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/15 px-4 py-3">
+      <h2 id="print-slip-modal-title" class="text-lg font-bold text-on-surface">Computation slip</h2>
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-xs font-semibold text-on-surface-variant">Show:</span>
+        <button type="button" class="slip-copy-btn rounded-lg border border-outline-variant/40 bg-surface-container px-3 py-1.5 text-xs font-bold text-on-surface hover:bg-surface-container-high" data-copy="both">Both</button>
+        <button type="button" class="slip-copy-btn rounded-lg border border-outline-variant/40 bg-surface-container px-3 py-1.5 text-xs font-bold text-on-surface hover:bg-surface-container-high" data-copy="owner">Owner's</button>
+        <button type="button" class="slip-copy-btn rounded-lg border border-outline-variant/40 bg-surface-container px-3 py-1.5 text-xs font-bold text-on-surface hover:bg-surface-container-high" data-copy="file">File copy</button>
+        <button type="button" id="print-iframe-btn" class="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-on-primary">
+          <span class="material-symbols-outlined text-base">print</span>
+          Print
+        </button>
+        <button type="button" id="close-print-modal" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-on-surface-variant hover:bg-surface-container">Close</button>
+      </div>
+    </div>
+    <iframe id="slip-print-iframe" title="Computation slip preview" class="min-h-[70vh] w-full flex-1 border-0 bg-white" src="about:blank"></iframe>
+  </div>
+</div>
+
+<div
+  id="pdf-modal"
+  class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/50 p-4"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="pdf-modal-title"
+>
+  <div class="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-outline-variant/20 bg-surface-container-lowest shadow-xl">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant/15 px-4 py-3">
+      <h2 id="pdf-modal-title" class="text-lg font-bold text-on-surface">Assessment PDF</h2>
+      <div class="flex flex-wrap items-center gap-2">
+        <a
+          href="/applications/{{ app.id }}/pdf"
+          class="inline-flex items-center gap-1 rounded-lg border border-outline-variant/40 bg-surface-container px-3 py-1.5 text-xs font-bold text-primary hover:bg-surface-container-high"
+          download
+        >
+          <span class="material-symbols-outlined text-base">download</span>
+          Download file
+        </a>
+        <button type="button" id="close-pdf-modal" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-on-surface-variant hover:bg-surface-container">Close</button>
+      </div>
+    </div>
+    <iframe id="pdf-inline-iframe" title="PDF preview" class="min-h-[75vh] w-full flex-1 border-0 bg-surface-container-highest" src="about:blank"></iframe>
+  </div>
 </div>
 {% endblock %}
 {% block scripts %}
 <script>
 (function () {
+  var canWrite = {{ permissions.applications.write | tojson }};
   var appId = {{ app.id }};
+  var printModal = document.getElementById("print-slip-modal");
+  var pdfModal = document.getElementById("pdf-modal");
+  var slipIframe = document.getElementById("slip-print-iframe");
+  var pdfIframe = document.getElementById("pdf-inline-iframe");
+
+  function openPrintModal(copy) {
+    if (!printModal || !slipIframe) return;
+    slipIframe.src = "/applications/" + appId + "/print?copy=" + (copy || "both");
+    printModal.classList.remove("hidden");
+    printModal.classList.add("flex");
+  }
+  function closePrintModal() {
+    if (!printModal || !slipIframe) return;
+    printModal.classList.add("hidden");
+    printModal.classList.remove("flex");
+    slipIframe.src = "about:blank";
+  }
+  function openPdfModal() {
+    if (!pdfModal || !pdfIframe) return;
+    pdfIframe.src = "/applications/" + appId + "/pdf?inline=1";
+    pdfModal.classList.remove("hidden");
+    pdfModal.classList.add("flex");
+  }
+  function closePdfModal() {
+    if (!pdfModal || !pdfIframe) return;
+    pdfModal.classList.add("hidden");
+    pdfModal.classList.remove("flex");
+    pdfIframe.src = "about:blank";
+  }
+
+  var openPrintBtn = document.getElementById("open-print-modal");
+  if (openPrintBtn) openPrintBtn.addEventListener("click", function () { openPrintModal("both"); });
+  document.querySelectorAll(".slip-copy-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      openPrintModal(btn.getAttribute("data-copy") || "both");
+    });
+  });
+  var closePrintBtn = document.getElementById("close-print-modal");
+  if (closePrintBtn) closePrintBtn.addEventListener("click", closePrintModal);
+  if (printModal) {
+    printModal.addEventListener("click", function (e) {
+      if (e.target === printModal) closePrintModal();
+    });
+  }
+  var printIframeBtn = document.getElementById("print-iframe-btn");
+  if (printIframeBtn && slipIframe) {
+    printIframeBtn.addEventListener("click", function () {
+      try {
+        if (slipIframe.contentWindow) slipIframe.contentWindow.focus();
+        if (slipIframe.contentWindow) slipIframe.contentWindow.print();
+      } catch (err) {}
+    });
+  }
+
+  var openPdfBtn = document.getElementById("open-pdf-modal");
+  if (openPdfBtn) openPdfBtn.addEventListener("click", openPdfModal);
+  var closePdfBtn = document.getElementById("close-pdf-modal");
+  if (closePdfBtn) closePdfBtn.addEventListener("click", closePdfModal);
+  if (pdfModal) {
+    pdfModal.addEventListener("click", function (e) {
+      if (e.target === pdfModal) closePdfModal();
+    });
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    if (printModal && !printModal.classList.contains("hidden")) closePrintModal();
+    if (pdfModal && !pdfModal.classList.contains("hidden")) closePdfModal();
+  });
+
   var statusEl = document.getElementById("fee-sync-status");
   var lcStatus = document.getElementById("lc-status");
   var dateGranted = document.getElementById("date-granted");
@@ -283,6 +404,18 @@
   var state = {{ fee_display_json | safe }};
   var debounceMs = 320;
   var timer = null;
+
+  if (!canWrite) {
+    if (statusEl) statusEl.textContent = "Read-only";
+    if (lcStatus) lcStatus.disabled = true;
+    if (dateGranted) dateGranted.disabled = true;
+    if (lcIn) lcIn.disabled = true;
+    if (surIn) surIn.disabled = true;
+    if (waiveIn) waiveIn.disabled = true;
+    if (unitsIn) unitsIn.disabled = true;
+    if (resetLc) resetLc.classList.add("hidden");
+    return;
+  }
 
   function money(n) {
     return "₱" + Number(n).toFixed(2);

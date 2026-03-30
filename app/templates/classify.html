@@ -14,6 +14,7 @@
   </p>
 </header>
 
+{% if permissions.applications.write %}
 <form
   method="post"
   action="/applications/{{ app.id }}/classify"
@@ -90,14 +91,28 @@
     </button>
   </div>
 </form>
+{% else %}
+<div class="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+  <p class="font-semibold">Read-only access</p>
+  <p class="mt-2">You can view this screen but your role does not allow changing classification. Contact an administrator if you need edit access.</p>
+  <a href="/applications/{{ app.id }}/assessment" class="mt-4 inline-flex font-bold text-amber-900 underline dark:text-amber-200">Continue to assessment (view)</a>
+</div>
+{% endif %}
 {% endblock %}
 {% block scripts %}
 <script>
 (function () {
+  var canWrite = {{ permissions.applications.write | tojson }};
   var catEl = document.getElementById("category");
   var costEl = document.getElementById("project-cost");
   var tplEl = document.getElementById("template-select");
   if (!catEl || !costEl || !tplEl) return;
+  if (!canWrite) {
+    catEl.disabled = true;
+    costEl.disabled = true;
+    tplEl.disabled = true;
+    return;
+  }
   function syncTemplate() {
     var cat = catEl.value;
     var cost = parseFloat(costEl.value);

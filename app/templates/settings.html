@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Settings — ZoningPro{% endblock %}
+{% block content %}
+<header class="mb-10">
+  <h1 class="mb-2 text-4xl font-extrabold tracking-tight text-on-surface">Settings</h1>
+  <p class="text-lg text-on-surface-variant">Fee defaults, print branding for locational clearance slips, and saved values for future receipts.</p>
+</header>
+
+<div class="max-w-3xl space-y-10">
+  {% if saved %}
+  <p class="rounded-lg bg-teal-50 px-4 py-3 text-sm font-medium text-teal-900 dark:bg-teal-900/30 dark:text-teal-100">Settings saved.</p>
+  {% endif %}
+
+  <form method="post" action="/settings" class="space-y-10">
+    <section class="rounded-xl border border-outline-variant/10 bg-surface-container-lowest p-8 shadow-sm">
+      <h2 class="mb-6 text-xl font-bold text-on-surface">Zoning certification fee</h2>
+      <div>
+        <label for="zoning_certification_price" class="mb-2 block text-sm font-semibold text-on-surface">Zoning certification fee (₱)</label>
+        <p class="mb-3 text-sm text-on-surface-variant">
+          Standard amount applied to fee templates that use the municipal zoning certification rate. LC fee formulas that reference 720 as a locational clearance base are unchanged.
+        </p>
+        <input
+          type="number"
+          name="zoning_certification_price"
+          id="zoning_certification_price"
+          value="{{ zoning_certification_price }}"
+          min="0"
+          step="0.01"
+          required
+          class="w-full max-w-md rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 text-on-surface shadow-inner focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+      </div>
+    </section>
+
+    <section class="rounded-xl border border-outline-variant/10 bg-surface-container-lowest p-8 shadow-sm">
+      <h2 class="mb-2 text-xl font-bold text-on-surface">Locational clearance &amp; computation slip</h2>
+      <p class="mb-6 text-sm text-on-surface-variant">Header, seal image, and signatory shown on the HTML print preview and generated PDF.</p>
+      <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+        <div class="md:col-span-2">
+          <label for="lc_republic_label" class="mb-1 block text-sm font-semibold text-on-surface">Republic line</label>
+          <input type="text" name="lc_republic_label" id="lc_republic_label" value="{{ print_lc.republic_label }}" class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"/>
+        </div>
+        <div>
+          <label for="lc_municipality_label" class="mb-1 block text-sm font-semibold text-on-surface">Municipality name</label>
+          <input type="text" name="lc_municipality_label" id="lc_municipality_label" value="{{ print_lc.municipality_label }}" class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"/>
+        </div>
+        <div>
+          <label for="lc_office_label" class="mb-1 block text-sm font-semibold text-on-surface">Office title</label>
+          <input type="text" name="lc_office_label" id="lc_office_label" value="{{ print_lc.office_label }}" class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"/>
+        </div>
+        <div class="md:col-span-2">
+          <label for="lc_logo_static_relpath" class="mb-1 block text-sm font-semibold text-on-surface">Logo file (under <code class="text-xs">app/static/</code>)</label>
+          <p class="mb-2 text-xs text-on-surface-variant">Example: <code class="text-xs">img/seal-binalbagan.png</code> — place the file in your static folder; path cannot contain <code class="text-xs">..</code>.</p>
+          <input type="text" name="lc_logo_static_relpath" id="lc_logo_static_relpath" value="{{ print_lc.logo_static_relpath }}" autocomplete="off" class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 font-mono text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"/>
+        </div>
+        <div>
+          <label for="lc_signatory_name" class="mb-1 block text-sm font-semibold text-on-surface">Signatory name</label>
+          <input type="text" name="lc_signatory_name" id="lc_signatory_name" value="{{ print_lc.signatory_name }}" class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"/>
+        </div>
+        <div>
+          <label for="lc_signatory_role" class="mb-1 block text-sm font-semibold text-on-surface">Signatory title / role</label>
+          <input type="text" name="lc_signatory_role" id="lc_signatory_role" value="{{ print_lc.signatory_role }}" class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"/>
+        </div>
+      </div>
+    </section>
+
+    <section class="rounded-xl border border-outline-variant/10 bg-surface-container-lowest p-8 shadow-sm">
+      <h2 class="mb-2 text-xl font-bold text-on-surface">Receipt (future)</h2>
+      <p class="mb-6 text-sm text-on-surface-variant">Separate branding for the upcoming receipt printout. Values are saved now so you can switch municipalities or signatories per document type later.</p>
+      <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+        <div class="md:col-span-2">
+          <label for="rcpt_republic_label" class="mb-1 block text-sm font-semibold text-on-surface">Republic line</label>
+          <input type="text" name="rcpt_republic_label" id="rcpt_republic_label" value="{{ print_rcpt.republic_label }}" class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"/>
+        </div>
+        <div>
+          <label for="rcpt_municipality_label" class="mb-1 block text-sm font-semibold text-on-surface">Municipality name</label>
+          <input type="text" name="rcpt_municipality_label" id="rcpt_municipality_label" value="{{ print_rcpt.municipality_label }}" class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"/>
+        </div>
+        <div>
+          <label for="rcpt_office_label" class="mb-1 block text-sm font-semibold text-on-surface">Office title</label>
+          <input type="text" name="rcpt_office_label" id="rcpt_office_label" value="{{ print_rcpt.office_label }}" class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"/>
+        </div>
+        <div class="md:col-span-2">
+          <label for="rcpt_logo_static_relpath" class="mb-1 block text-sm font-semibold text-on-surface">Logo file (under <code class="text-xs">app/static/</code>)</label>
+          <input type="text" name="rcpt_logo_static_relpath" id="rcpt_logo_static_relpath" value="{{ print_rcpt.logo_static_relpath }}" autocomplete="off" class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 font-mono text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"/>
+        </div>
+        <div>
+          <label for="rcpt_signatory_name" class="mb-1 block text-sm font-semibold text-on-surface">Signatory name</label>
+          <input type="text" name="rcpt_signatory_name" id="rcpt_signatory_name" value="{{ print_rcpt.signatory_name }}" class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"/>
+        </div>
+        <div>
+          <label for="rcpt_signatory_role" class="mb-1 block text-sm font-semibold text-on-surface">Signatory title / role</label>
+          <input type="text" name="rcpt_signatory_role" id="rcpt_signatory_role" value="{{ print_rcpt.signatory_role }}" class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-3 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"/>
+        </div>
+      </div>
+    </section>
+
+    <button
+      type="submit"
+      class="bg-primary-gradient inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-on-primary shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
+    >
+      <span class="material-symbols-outlined">save</span>
+      Save settings
+    </button>
+  </form>
+</div>
+{% endblock %}

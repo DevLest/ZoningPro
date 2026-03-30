@@ -4,22 +4,47 @@ import json
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from typing import Any, Literal
-
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from starlette.middleware.sessions import SessionMiddleware
 
-from app.config import EXPORTS_DIR, PROJECT_ROOT
-from app.db import get_db, init_db
+from app.auth import (
+    LoginRequired,
+    hash_password,
+    require_admin,
+    require_applications_read,
+    require_applications_write,
+    require_dashboard_read,
+    require_export_read,
+    require_settings_read,
+    require_settings_write,
+    require_users_read,
+    require_users_write,
+    verify_password,
+)
+from app.config import EXPORTS_DIR, PROJECT_ROOT, SECRET_KEY
+from app.db import SessionLocal, get_db, init_db
 from app.export_excel import export_lc_workbook
+from app.geocode import address_suggestions
 from app.fees import TEMPLATE_REGISTRY, compute_fees, list_categories, suggest_template
 from app.fees.registry import get_template
-from app.models import LCApplication
+from app.models import LCApplication, RolePermission, User
+from app.permission_defs import MODULES, MODULE_KEYS, ROLE_ADMIN, ROLE_STAFF
 from app.pdf_slip import build_assessment_pdf
 from app.resolved_fees import DisplayFees, display_fees_for_application
+from app.seeds import run_all_seeds
+from app.settings_store import (
+    PRINT_PROFILE_LC,
+    PRINT_PROFILE_RECEIPT,
+    get_print_profile,
+    get_zoning_certification_price,
+    load_settings,
+    save_settings,
+)
 from app.ui_context import merge_shell, shell_for_application
 
 PROJECT_TYPE_DISPLAY = {
@@ -57,14 +82,402 @@ class AssessmentSyncIn(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    db = SessionLocal()
+    try:
+        run_all_seeds(db)
+    finally:
+        db.close()
     yield
 
 
 app = FastAPI(title="Zoning Assessment", version="1.0.0", lifespan=lifespan)
 
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SECRET_KEY,
+    max_age=14 * 24 * 3600,
+    same_site="lax",
+)
+
+
+@app.exception_handler(LoginRequired)
+async def login_required_handler(request: Request, exc: LoginRequired):
+    from urllib.parse import quote
+
+    nxt = quote(str(request.url.path), safe="")
+    return RedirectResponse(url=f"/login?next={nxt}", status_code=303)
+
+
 static_dir = PROJECT_ROOT / "app" / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_get(request: Request, db: Session = Depends(get_db)):
+    uid = request.session.get("user_id")
+    if uid is not None:
+        u = db.get(User, int(uid))
+        if u is not None and u.is_active:
+            return RedirectResponse(url="/", status_code=303)
+    next_path = (request.query_params.get("next") or "/").strip()
+    if not next_path.startswith("/") or next_path.startswith("//"):
+        next_path = "/"
+    return templates.TemplateResponse(
+        request,
+        "login.html",
+        {"error": None, "next": next_path},
+    )
+
+
+@app.post("/login")
+def login_post(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    next_url: str = Form("/", alias="next"),
+    db: Session = Depends(get_db),
+):
+    u = db.query(User).filter(User.username == username.strip()).first()
+    err: str | None = None
+    if not u or not verify_password(password, u.password_hash):
+        err = "Invalid username or password."
+    elif not u.is_active:
+        err = "This account is disabled."
+    next_path = (next_url or "/").strip()
+    if not next_path.startswith("/") or next_path.startswith("//"):
+        next_path = "/"
+    if err:
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {"error": err, "next": next_path},
+        )
+    request.session["user_id"] = u.id
+    return RedirectResponse(url=next_path, status_code=303)
+
+
+@app.post("/logout")
+def logout_post(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/login", status_code=303)
+
+
+@app.get("/users", response_class=HTMLResponse)
+def users_get(request: Request, db: Session = Depends(get_db), user: User = Depends(require_users_read)):
+    rows = db.query(User).order_by(User.created_at.desc()).all()
+    open_modal = request.query_params.get("add") == "1"
+    return templates.TemplateResponse(
+        request,
+        "users.html",
+        merge_shell(
+            {
+                "users": rows,
+                "user_message": None,
+                "user_error": None,
+                "add_user_modal_open": open_modal,
+                "open_reset_modal_user_id": None,
+                "open_edit_modal_user_id": None,
+            },
+            current_user=user,
+            db=db,
+            nav_active="users",
+            sidebar_active="users",
+            project_title="Users",
+            project_subtitle="Accounts",
+        ),
+    )
+
+
+@app.post("/users")
+def users_post(
+    request: Request,
+    new_username: str = Form(...),
+    new_password: str = Form(...),
+    full_name: str = Form(""),
+    new_role: str = Form(ROLE_STAFF),
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_users_write),
+):
+    uname = new_username.strip()
+    pwd = new_password
+    fn = full_name.strip() or None
+    role = (new_role or ROLE_STAFF).strip().lower()
+    err: str | None = None
+    if len(uname) < 2:
+        err = "Username must be at least 2 characters."
+    elif len(pwd) < 6:
+        err = "Password must be at least 6 characters."
+    elif db.query(User).filter(User.username == uname).first():
+        err = "That username is already taken."
+    elif role not in (ROLE_ADMIN, ROLE_STAFF):
+        err = "Invalid role."
+    elif actor.role != ROLE_ADMIN and role == ROLE_ADMIN:
+        err = "Only administrators can create administrator accounts."
+    if err:
+        rows = db.query(User).order_by(User.created_at.desc()).all()
+        return templates.TemplateResponse(
+            request,
+            "users.html",
+            merge_shell(
+                {
+                    "users": rows,
+                    "user_message": None,
+                    "user_error": err,
+                    "add_user_modal_open": True,
+                    "open_reset_modal_user_id": None,
+                    "open_edit_modal_user_id": None,
+                },
+                current_user=actor,
+                db=db,
+                nav_active="users",
+                sidebar_active="users",
+                project_title="Users",
+                project_subtitle="Accounts",
+            ),
+        )
+    u = User(
+        username=uname,
+        password_hash=hash_password(pwd),
+        full_name=fn,
+        role=role,
+        is_active=True,
+    )
+    db.add(u)
+    db.commit()
+    rows = db.query(User).order_by(User.created_at.desc()).all()
+    return templates.TemplateResponse(
+        request,
+        "users.html",
+        merge_shell(
+            {
+                "users": rows,
+                "user_message": f"User “{uname}” created.",
+                "user_error": None,
+                "open_reset_modal_user_id": None,
+                "open_edit_modal_user_id": None,
+            },
+            current_user=actor,
+            db=db,
+            nav_active="users",
+            sidebar_active="users",
+            project_title="Users",
+            project_subtitle="Accounts",
+        ),
+    )
+
+
+def _count_admins(db: Session) -> int:
+    return db.query(User).filter(User.role == ROLE_ADMIN).count()
+
+
+@app.post("/users/{user_id}/update")
+def users_update(
+    request: Request,
+    user_id: int,
+    edit_username: str = Form(...),
+    edit_full_name: str = Form(""),
+    edit_role: str = Form(ROLE_STAFF),
+    edit_is_active: str | None = Form(None),
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_users_write),
+):
+    target = db.get(User, user_id)
+    rows = db.query(User).order_by(User.created_at.desc()).all()
+
+    def render(err: str | None, msg: str | None):
+        edit_open: int | None = None
+        if err and target and (actor.role == ROLE_ADMIN or target.role != ROLE_ADMIN):
+            edit_open = target.id
+        return templates.TemplateResponse(
+            request,
+            "users.html",
+            merge_shell(
+                {
+                    "users": rows,
+                    "user_message": msg,
+                    "user_error": err,
+                    "open_reset_modal_user_id": None,
+                    "open_edit_modal_user_id": edit_open,
+                },
+                current_user=actor,
+                db=db,
+                nav_active="users",
+                sidebar_active="users",
+                project_title="Users",
+                project_subtitle="Accounts",
+            ),
+        )
+
+    if not target:
+        raise HTTPException(404)
+
+    if actor.role != ROLE_ADMIN and target.role == ROLE_ADMIN:
+        return render("Only an administrator can change administrator accounts.", None)
+
+    uname = edit_username.strip()
+    fn = edit_full_name.strip() or None
+    role = (edit_role or ROLE_STAFF).strip().lower()
+    is_active = edit_is_active in ("1", "on", "true", "yes")
+
+    err: str | None = None
+    if len(uname) < 2:
+        err = "Username must be at least 2 characters."
+    elif role not in (ROLE_ADMIN, ROLE_STAFF):
+        err = "Invalid role."
+    elif actor.role != ROLE_ADMIN and role == ROLE_ADMIN:
+        err = "Only administrators can assign the administrator role."
+    else:
+        taken = db.query(User).filter(User.username == uname, User.id != target.id).first()
+        if taken:
+            err = "That username is already taken."
+
+    if not err and target.id == actor.id and not is_active:
+        err = "You cannot deactivate your own account."
+
+    if not err and target.role == ROLE_ADMIN:
+        would_remove_admin = role != ROLE_ADMIN or not is_active
+        if would_remove_admin and _count_admins(db) == 1:
+            err = "Cannot remove or deactivate the last administrator."
+
+    if err:
+        return render(err, None)
+
+    target.username = uname
+    target.full_name = fn
+    target.role = role
+    target.is_active = is_active
+    db.commit()
+    rows = db.query(User).order_by(User.created_at.desc()).all()
+    return render(
+        None,
+        f"User “{uname}” updated.",
+    )
+
+
+@app.post("/users/{user_id}/reset-password")
+def users_reset_password(
+    request: Request,
+    user_id: int,
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+    db: Session = Depends(get_db),
+    actor: User = Depends(require_users_write),
+):
+    target = db.get(User, user_id)
+    rows = db.query(User).order_by(User.created_at.desc()).all()
+
+    def render(err: str | None, msg: str | None, modal_uid: int | None):
+        return templates.TemplateResponse(
+            request,
+            "users.html",
+            merge_shell(
+                {
+                    "users": rows,
+                    "user_message": msg,
+                    "user_error": err,
+                    "open_reset_modal_user_id": modal_uid,
+                    "open_edit_modal_user_id": None,
+                },
+                current_user=actor,
+                db=db,
+                nav_active="users",
+                sidebar_active="users",
+                project_title="Users",
+                project_subtitle="Accounts",
+            ),
+        )
+
+    if not target:
+        raise HTTPException(404)
+
+    if actor.role != ROLE_ADMIN and target.role == ROLE_ADMIN:
+        return render("Only an administrator can reset an administrator’s password.", None, None)
+
+    pwd_new = (new_password or "").strip()
+    pwd_confirm = (confirm_password or "").strip()
+
+    err: str | None = None
+    if not pwd_new or not pwd_confirm:
+        err = "Enter and confirm the new password."
+    elif pwd_new != pwd_confirm:
+        err = "New password and confirmation do not match."
+    elif len(pwd_new) < 6:
+        err = "New password must be at least 6 characters."
+
+    if err:
+        return render(err, None, target.id)
+
+    target.password_hash = hash_password(pwd_new)
+    db.commit()
+    rows = db.query(User).order_by(User.created_at.desc()).all()
+    uname = target.username
+    return render(None, f"Password updated for “{uname}”.", None)
+
+
+@app.get("/permissions", response_class=HTMLResponse)
+def permissions_get(request: Request, db: Session = Depends(get_db), admin: User = Depends(require_admin)):
+    rows = {r.module_key: r for r in db.query(RolePermission).filter(RolePermission.role == ROLE_STAFF).all()}
+    return templates.TemplateResponse(
+        request,
+        "permissions.html",
+        merge_shell(
+            {
+                "modules": MODULES,
+                "staff_perms": rows,
+                "saved": False,
+            },
+            current_user=admin,
+            db=db,
+            nav_active="permissions",
+            sidebar_active="permissions",
+            project_title="Role permissions",
+            project_subtitle="Staff access",
+        ),
+    )
+
+
+@app.post("/permissions")
+async def permissions_post(
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    form = await request.form()
+    for key in MODULE_KEYS:
+        read = form.get(f"read_{key}") in ("1", "on", "true", "yes")
+        write = form.get(f"write_{key}") in ("1", "on", "true", "yes")
+        if write:
+            read = True
+        row = (
+            db.query(RolePermission)
+            .filter(RolePermission.role == ROLE_STAFF, RolePermission.module_key == key)
+            .first()
+        )
+        if row:
+            row.can_read = read
+            row.can_write = write
+        else:
+            db.add(RolePermission(role=ROLE_STAFF, module_key=key, can_read=read, can_write=write))
+    db.commit()
+    rows = {r.module_key: r for r in db.query(RolePermission).filter(RolePermission.role == ROLE_STAFF).all()}
+    return templates.TemplateResponse(
+        request,
+        "permissions.html",
+        merge_shell(
+            {
+                "modules": MODULES,
+                "staff_perms": rows,
+                "saved": True,
+            },
+            current_user=admin,
+            db=db,
+            nav_active="permissions",
+            sidebar_active="permissions",
+            project_title="Role permissions",
+            project_subtitle="Staff access",
+        ),
+    )
 
 
 def _parse_date(s: str | None) -> date | None:
@@ -147,12 +560,118 @@ def _apply_assessment_inputs(
 
 
 @app.get("/api/suggest-template")
-def api_suggest_template(category: str, project_cost: float):
+def api_suggest_template(
+    category: str,
+    project_cost: float,
+    _user: User = Depends(require_applications_read),
+):
     return {"template_id": suggest_template(category, project_cost)}
 
 
+@app.get("/api/address-suggest")
+def api_address_suggest(
+    q: str = Query("", max_length=500),
+    _user: User = Depends(require_applications_read),
+):
+    """Autocomplete for applicant address (Nominatim by default, or Google Places if key is set)."""
+    suggestions, provider = address_suggestions(q, limit=8)
+    return {"suggestions": suggestions, "provider": provider}
+
+
+@app.get("/settings", response_class=HTMLResponse)
+def settings_get(request: Request, db: Session = Depends(get_db), user: User = Depends(require_settings_read)):
+    s = load_settings()
+    pp = s["print_profiles"]
+    return templates.TemplateResponse(
+        request,
+        "settings.html",
+        merge_shell(
+            {
+                "zoning_certification_price": s["zoning_certification_price"],
+                "print_lc": pp[PRINT_PROFILE_LC],
+                "print_rcpt": pp[PRINT_PROFILE_RECEIPT],
+                "saved": False,
+            },
+            current_user=user,
+            db=db,
+            nav_active="settings",
+            sidebar_active="settings",
+            project_title="Settings",
+            project_subtitle="Fee defaults",
+        ),
+    )
+
+
+@app.post("/settings")
+def settings_post(
+    request: Request,
+    zoning_certification_price: str = Form(...),
+    lc_republic_label: str = Form(""),
+    lc_municipality_label: str = Form(""),
+    lc_office_label: str = Form(""),
+    lc_logo_static_relpath: str = Form(""),
+    lc_signatory_name: str = Form(""),
+    lc_signatory_role: str = Form(""),
+    rcpt_republic_label: str = Form(""),
+    rcpt_municipality_label: str = Form(""),
+    rcpt_office_label: str = Form(""),
+    rcpt_logo_static_relpath: str = Form(""),
+    rcpt_signatory_name: str = Form(""),
+    rcpt_signatory_role: str = Form(""),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_settings_write),
+):
+    try:
+        v = float(zoning_certification_price)
+    except ValueError:
+        v = get_zoning_certification_price()
+    save_settings(
+        {
+            "zoning_certification_price": max(0.0, v),
+            "print_profiles": {
+                PRINT_PROFILE_LC: {
+                    "republic_label": lc_republic_label,
+                    "municipality_label": lc_municipality_label,
+                    "office_label": lc_office_label,
+                    "logo_static_relpath": lc_logo_static_relpath,
+                    "signatory_name": lc_signatory_name,
+                    "signatory_role": lc_signatory_role,
+                },
+                PRINT_PROFILE_RECEIPT: {
+                    "republic_label": rcpt_republic_label,
+                    "municipality_label": rcpt_municipality_label,
+                    "office_label": rcpt_office_label,
+                    "logo_static_relpath": rcpt_logo_static_relpath,
+                    "signatory_name": rcpt_signatory_name,
+                    "signatory_role": rcpt_signatory_role,
+                },
+            },
+        }
+    )
+    s = load_settings()
+    pp = s["print_profiles"]
+    return templates.TemplateResponse(
+        request,
+        "settings.html",
+        merge_shell(
+            {
+                "zoning_certification_price": s["zoning_certification_price"],
+                "print_lc": pp[PRINT_PROFILE_LC],
+                "print_rcpt": pp[PRINT_PROFILE_RECEIPT],
+                "saved": True,
+            },
+            current_user=user,
+            db=db,
+            nav_active="settings",
+            sidebar_active="settings",
+            project_title="Settings",
+            project_subtitle="Fee defaults",
+        ),
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
-def dashboard(request: Request, db: Session = Depends(get_db)):
+def dashboard(request: Request, db: Session = Depends(get_db), user: User = Depends(require_dashboard_read)):
     apps = db.query(LCApplication).order_by(LCApplication.created_at.desc()).limit(100).all()
     classified_count = sum(1 for a in apps if a.template_id)
     with_totals_count = sum(1 for a in apps if a.total is not None)
@@ -165,6 +684,8 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
                 "classified_count": classified_count,
                 "with_totals_count": with_totals_count,
             },
+            current_user=user,
+            db=db,
             nav_active="dashboard",
             sidebar_active="overview",
         ),
@@ -172,13 +693,19 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
 
 
 @app.get("/applications/new", response_class=HTMLResponse)
-def new_application_form(request: Request):
+def new_application_form(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_applications_write),
+):
     today = date.today().isoformat()
     return templates.TemplateResponse(
         request,
         "new.html",
         merge_shell(
-            {"today": today},
+            {"today": today, "lc_status_options": LC_STATUS_OPTIONS},
+            current_user=user,
+            db=db,
             nav_active="new_application",
             sidebar_active="site_analysis",
             project_title="New LC application",
@@ -199,6 +726,7 @@ def new_application_post(
     lc_status: str = Form(""),
     date_granted: str = Form(""),
     db: Session = Depends(get_db),
+    _user: User = Depends(require_applications_write),
 ):
     row = LCApplication(
         lc_ctrl_no=lc_ctrl_no.strip(),
@@ -218,7 +746,12 @@ def new_application_post(
 
 
 @app.get("/applications/{app_id}/classify", response_class=HTMLResponse)
-def classify_get(request: Request, app_id: int, db: Session = Depends(get_db)):
+def classify_get(
+    request: Request,
+    app_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_applications_read),
+):
     row = db.get(LCApplication, app_id)
     if not row:
         raise HTTPException(404)
@@ -229,7 +762,13 @@ def classify_get(request: Request, app_id: int, db: Session = Depends(get_db)):
     grouped = {}
     for t in TEMPLATE_REGISTRY:
         grouped.setdefault(t.category, []).append(t)
-    ctx = shell_for_application(row, nav_active="estimations", sidebar_active="site_analysis")
+    ctx = shell_for_application(
+        row,
+        nav_active="estimations",
+        sidebar_active="site_analysis",
+        current_user=user,
+        db=db,
+    )
     ctx.update(
         {
             "app": row,
@@ -251,6 +790,7 @@ def classify_post(
     lot_area_sqm: str = Form(""),
     template_id: str = Form(...),
     db: Session = Depends(get_db),
+    _user: User = Depends(require_applications_write),
 ):
     row = db.get(LCApplication, app_id)
     if not row:
@@ -265,7 +805,12 @@ def classify_post(
 
 
 @app.get("/applications/{app_id}/assessment", response_class=HTMLResponse)
-def assessment_get(request: Request, app_id: int, db: Session = Depends(get_db)):
+def assessment_get(
+    request: Request,
+    app_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_applications_read),
+):
     row = db.get(LCApplication, app_id)
     if not row:
         raise HTTPException(404)
@@ -280,6 +825,8 @@ def assessment_get(request: Request, app_id: int, db: Session = Depends(get_db))
         nav_active="estimations",
         sidebar_active="fee_calculator",
         show_finalize_cta=True,
+        current_user=user,
+        db=db,
     )
     ctx.update(
         {
@@ -297,7 +844,12 @@ def assessment_get(request: Request, app_id: int, db: Session = Depends(get_db))
 
 
 @app.post("/api/applications/{app_id}/assessment-sync")
-def assessment_sync(app_id: int, body: AssessmentSyncIn, db: Session = Depends(get_db)):
+def assessment_sync(
+    app_id: int,
+    body: AssessmentSyncIn,
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_applications_write),
+):
     row = db.get(LCApplication, app_id)
     if not row:
         raise HTTPException(404)
@@ -326,6 +878,7 @@ def assessment_post(
     date_granted: str = Form(""),
     lc_fee_amount: str = Form(""),
     db: Session = Depends(get_db),
+    _user: User = Depends(require_applications_write),
 ):
     row = db.get(LCApplication, app_id)
     if not row:
@@ -346,7 +899,7 @@ def assessment_post(
 
 
 @app.post("/applications/{app_id}/finalize")
-def finalize_post(app_id: int, db: Session = Depends(get_db)):
+def finalize_post(app_id: int, db: Session = Depends(get_db), _user: User = Depends(require_applications_write)):
     row = db.get(LCApplication, app_id)
     if not row or not row.template_id or row.project_cost is None:
         raise HTTPException(404)
@@ -368,6 +921,7 @@ def print_slip(
         description="Which slip to print: both sides, owner's copy only, or file copy only.",
     ),
     db: Session = Depends(get_db),
+    _user: User = Depends(require_applications_read),
 ):
     row = db.get(LCApplication, app_id)
     if not row or not row.template_id or row.project_cost is None:
@@ -386,14 +940,20 @@ def print_slip(
             "meta": meta,
             "project_type_label": ptype,
             "lot_display": lot_s,
-            "app_date": row.date_of_application.strftime("%b %d, %Y"),
+            "app_date": row.date_of_application.strftime("%m/%d/%Y"),
             "print_copy": copy,
+            "print_branding": get_print_profile(PRINT_PROFILE_LC),
         },
     )
 
 
 @app.get("/applications/{app_id}/pdf")
-def download_pdf(app_id: int, db: Session = Depends(get_db)):
+def download_pdf(
+    app_id: int,
+    inline: bool = Query(False, description="If true, serve PDF for inline viewing (e.g. modal iframe)."),
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_applications_read),
+):
     row = db.get(LCApplication, app_id)
     if not row or not row.template_id or row.project_cost is None:
         raise HTTPException(404)
@@ -404,7 +964,7 @@ def download_pdf(app_id: int, db: Session = Depends(get_db)):
     build_assessment_pdf(
         out_path=out,
         ctrl_no=row.lc_ctrl_no,
-        app_date=row.date_of_application.strftime("%b %d, %Y"),
+        app_date=row.date_of_application.strftime("%m/%d/%Y"),
         applicant=row.applicant_name,
         address=row.address,
         project=row.project_name or "",
@@ -418,16 +978,21 @@ def download_pdf(app_id: int, db: Session = Depends(get_db)):
         zoning=display.zoning_cert,
         total=display.total,
         zoning_waived=display.zoning_waived,
+        branding=get_print_profile(PRINT_PROFILE_LC),
     )
-    return FileResponse(
-        path=out,
-        filename=f"LC_{row.lc_ctrl_no.replace('/', '-')}_assessment.pdf",
-        media_type="application/pdf",
-    )
+    safe_name = f"LC_{row.lc_ctrl_no.replace('/', '-')}_assessment.pdf"
+    if inline:
+        return FileResponse(
+            path=out,
+            filename=safe_name,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="{safe_name}"'},
+        )
+    return FileResponse(path=out, filename=safe_name, media_type="application/pdf")
 
 
 @app.get("/export/applications.xlsx")
-def export_all_xlsx(db: Session = Depends(get_db)):
+def export_all_xlsx(db: Session = Depends(get_db), _user: User = Depends(require_export_read)):
     rows = db.query(LCApplication).order_by(LCApplication.id.asc()).all()
     out = EXPORTS_DIR / "lc_applications_export.xlsx"
     export_lc_workbook(rows, out)

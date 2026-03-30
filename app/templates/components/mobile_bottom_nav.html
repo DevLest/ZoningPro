@@ -8,12 +8,16 @@
     <span class="material-symbols-outlined">calculate</span>
     <span class="text-[10px] font-bold">Fees</span>
   </a>
+  {% if permissions['export'].read %}
   <a href="{{ navbar_export_href }}" class="flex flex-col items-center {% if nav_active == 'documents' %}text-primary{% else %}text-slate-400{% endif %}">
     <span class="material-symbols-outlined">folder</span>
     <span class="text-[10px] font-bold">Docs</span>
   </a>
+  {% endif %}
+  {% if permissions.applications.write %}
   <a href="/applications/new" class="flex flex-col items-center {% if nav_active == 'new_application' %}text-primary{% else %}text-slate-400{% endif %}">
     <span class="material-symbols-outlined">person</span>
     <span class="text-[10px] font-bold">New</span>
   </a>
+  {% endif %}
 </div>

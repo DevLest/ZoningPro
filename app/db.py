@@ -40,8 +40,23 @@ def _migrate_sqlite_schema() -> None:
             conn.execute(text("ALTER TABLE lc_applications ADD COLUMN lc_fee_override REAL"))
 
 
+def _migrate_users_roles() -> None:
+    """Add users.role from legacy is_admin; role_permissions table is created by create_all."""
+    insp = inspect(engine)
+    if not insp.has_table("users"):
+        return
+    cols = {c["name"] for c in insp.get_columns("users")}
+    with engine.begin() as conn:
+        if "role" not in cols:
+            conn.execute(text("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'staff'"))
+        if "is_admin" in cols:
+            conn.execute(text("UPDATE users SET role = 'admin' WHERE is_admin != 0"))
+            conn.execute(text("UPDATE users SET role = 'staff' WHERE role IS NULL OR role = ''"))
+
+
 def init_db():
     from app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     _migrate_sqlite_schema()
+    _migrate_users_roles()

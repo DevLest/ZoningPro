@@ -1,0 +1,496 @@
+{% extends "base.html" %}
+{% block title %}Users — ZoningPro{% endblock %}
+{% block content %}
+<header class="mb-8 flex flex-col gap-4 sm:mb-10 sm:flex-row sm:items-end sm:justify-between">
+  <div>
+    <h1 class="mb-2 text-3xl font-extrabold tracking-tight text-on-surface sm:text-4xl">Users</h1>
+    <p class="max-w-2xl text-base text-on-surface-variant sm:text-lg">
+      Accounts that can sign in to ZoningPro. <strong class="font-semibold text-on-surface">Admin</strong> has full access;
+      <strong class="font-semibold text-on-surface">Staff</strong> follows the role permissions you configure under Roles.
+    </p>
+  </div>
+  {% if permissions.users.write %}
+  <button
+    type="button"
+    id="open-add-user-modal"
+    class="bg-primary-gradient inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-xl px-5 py-2.5 text-sm font-bold text-on-primary shadow-md transition-opacity hover:opacity-90 sm:self-auto"
+  >
+    <span class="material-symbols-outlined text-lg">person_add</span>
+    Add user
+  </button>
+  {% endif %}
+</header>
+
+{% if user_message %}
+<p class="mb-6 rounded-lg bg-teal-50 px-4 py-3 text-sm font-medium text-teal-900 dark:bg-teal-900/30 dark:text-teal-100">{{ user_message }}</p>
+{% endif %}
+{% if user_error %}
+<p class="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-900 dark:bg-red-900/30 dark:text-red-100">{{ user_error }}</p>
+{% endif %}
+
+<div class="overflow-hidden rounded-xl border border-outline-variant/10 bg-surface-container-lowest shadow-sm">
+  <div class="border-b border-outline-variant/10 px-5 py-4 sm:px-6">
+    <h2 class="text-lg font-bold text-on-surface">All users ({{ users|length }})</h2>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full min-w-[36rem] text-left text-sm">
+      <thead class="bg-surface-container-high/50 text-on-surface-variant">
+        <tr>
+          <th class="whitespace-nowrap px-5 py-3 font-semibold sm:px-6">Username</th>
+          <th class="whitespace-nowrap px-5 py-3 font-semibold sm:px-6">Name</th>
+          <th class="whitespace-nowrap px-5 py-3 font-semibold sm:px-6">Role</th>
+          <th class="whitespace-nowrap px-5 py-3 font-semibold sm:px-6">Status</th>
+          <th class="whitespace-nowrap px-5 py-3 font-semibold sm:px-6">Created</th>
+          {% if permissions.users.write %}
+          <th class="whitespace-nowrap px-5 py-3 font-semibold sm:px-6">Actions</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-outline-variant/10">
+        {% for u in users %}
+        <tr class="text-on-surface">
+          <td class="px-5 py-3 font-medium sm:px-6">{{ u.username }}</td>
+          <td class="px-5 py-3 text-on-surface-variant sm:px-6">{{ u.full_name or "—" }}</td>
+          <td class="px-5 py-3 sm:px-6">
+            {% if u.role == 'admin' %}
+            <span class="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-semibold text-teal-900 dark:bg-teal-900/40 dark:text-teal-100">Admin</span>
+            {% else %}
+            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-800 dark:bg-slate-800/60 dark:text-slate-200">Staff</span>
+            {% endif %}
+          </td>
+          <td class="px-5 py-3 sm:px-6">
+            {% if u.is_active %}<span class="text-teal-700 dark:text-teal-400">Active</span>{% else %}<span class="text-slate-500">Disabled</span>{% endif %}
+          </td>
+          <td class="whitespace-nowrap px-5 py-3 text-on-surface-variant sm:px-6">{{ u.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+          {% if permissions.users.write %}
+          <td class="px-5 py-3 sm:px-6">
+            {% if is_admin or u.role != 'admin' %}
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded-lg border border-outline-variant/30 bg-surface px-3 py-1.5 text-xs font-semibold text-on-surface shadow-sm transition-colors hover:bg-surface-container sm:text-sm"
+                data-open-edit-user="{{ u.id }}"
+                aria-haspopup="dialog"
+              >
+                <span class="material-symbols-outlined text-base">manage_accounts</span>
+                Edit
+              </button>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 rounded-lg border border-outline-variant/30 bg-surface px-3 py-1.5 text-xs font-semibold text-on-surface shadow-sm transition-colors hover:bg-surface-container sm:text-sm"
+                data-open-reset-password="{{ u.id }}"
+                aria-haspopup="dialog"
+              >
+                <span class="material-symbols-outlined text-base">lock_reset</span>
+                Reset password
+              </button>
+            </div>
+            {% else %}
+            <span class="text-xs text-on-surface-variant" title="Only an administrator can edit administrator accounts">Admin only</span>
+            {% endif %}
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if permissions.users.write %}
+<div
+  id="add-user-modal"
+  class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/50 p-4"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="add-user-modal-title"
+  {% if add_user_modal_open %}data-open-on-load="1"{% endif %}
+>
+  <div class="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-outline-variant/20 bg-surface-container-lowest shadow-xl">
+    <form method="post" action="/users" class="flex flex-col">
+      <div class="flex items-center justify-between gap-3 border-b border-outline-variant/15 px-5 py-4">
+        <h2 id="add-user-modal-title" class="text-lg font-bold text-on-surface">Add user</h2>
+        <button
+          type="button"
+          class="rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-surface-container"
+          data-close-add-user
+          aria-label="Close"
+        >
+          <span class="material-symbols-outlined text-2xl leading-none">close</span>
+        </button>
+      </div>
+      <div class="space-y-4 overflow-y-auto px-5 py-5">
+        <div>
+          <label for="new_username" class="mb-1 block text-sm font-semibold text-on-surface">Username</label>
+          <input
+            type="text"
+            name="new_username"
+            id="new_username"
+            required
+            minlength="2"
+            autocomplete="off"
+            class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-2.5 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        <div>
+          <label for="new_password" class="mb-1 block text-sm font-semibold text-on-surface">Password</label>
+          <input
+            type="password"
+            name="new_password"
+            id="new_password"
+            required
+            minlength="6"
+            autocomplete="new-password"
+            class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-2.5 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <p class="mt-1 text-xs text-on-surface-variant">At least 6 characters.</p>
+        </div>
+        <div>
+          <label for="full_name" class="mb-1 block text-sm font-semibold text-on-surface"
+            >Full name <span class="font-normal text-on-surface-variant">(optional)</span></label
+          >
+          <input
+            type="text"
+            name="full_name"
+            id="full_name"
+            autocomplete="name"
+            class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-2.5 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        <div>
+          <label for="new_role" class="mb-1 block text-sm font-semibold text-on-surface">Role</label>
+          <select
+            name="new_role"
+            id="new_role"
+            class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-2.5 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="staff">Staff</option>
+            {% if is_admin %}
+            <option value="admin">Administrator</option>
+            {% endif %}
+          </select>
+          <p class="mt-1 text-xs text-on-surface-variant">Only administrators can create other administrators.</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center justify-end gap-2 border-t border-outline-variant/15 px-5 py-4">
+        <button
+          type="button"
+          class="rounded-xl px-4 py-2.5 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-surface-container"
+          data-close-add-user
+        >
+          Cancel
+        </button>
+        <button type="submit" class="bg-primary-gradient inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-on-primary shadow-md hover:opacity-90">
+          <span class="material-symbols-outlined text-lg">person_add</span>
+          Create user
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% for u in users %}
+{% if is_admin or u.role != 'admin' %}
+<div
+  id="edit-user-modal-{{ u.id }}"
+  class="edit-user-modal fixed inset-0 z-[100] hidden items-center justify-center bg-black/50 p-4"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="edit-user-modal-title-{{ u.id }}"
+  {% if open_edit_modal_user_id is defined and open_edit_modal_user_id is not none and open_edit_modal_user_id == u.id %}data-open-on-load="1"{% endif %}
+>
+  <div class="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-outline-variant/20 bg-surface-container-lowest shadow-xl">
+    <form method="post" action="/users/{{ u.id }}/update" class="flex flex-col">
+      <div class="flex items-center justify-between gap-3 border-b border-outline-variant/15 px-5 py-4">
+        <h2 id="edit-user-modal-title-{{ u.id }}" class="text-lg font-bold text-on-surface">Edit user</h2>
+        <button
+          type="button"
+          class="rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-surface-container"
+          data-close-edit-user
+          aria-label="Close"
+        >
+          <span class="material-symbols-outlined text-2xl leading-none">close</span>
+        </button>
+      </div>
+      <div class="space-y-4 overflow-y-auto px-5 py-5">
+        <p class="text-sm text-on-surface-variant">Update username, name, role, and whether the account is active.</p>
+        <div>
+          <label for="edit_username_{{ u.id }}" class="mb-1 block text-sm font-semibold text-on-surface">Username</label>
+          <input
+            type="text"
+            name="edit_username"
+            id="edit_username_{{ u.id }}"
+            value="{{ u.username }}"
+            required
+            minlength="2"
+            autocomplete="off"
+            class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-2.5 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        <div>
+          <label for="edit_full_name_{{ u.id }}" class="mb-1 block text-sm font-semibold text-on-surface"
+            >Full name <span class="font-normal text-on-surface-variant">(optional)</span></label
+          >
+          <input
+            type="text"
+            name="edit_full_name"
+            id="edit_full_name_{{ u.id }}"
+            value="{{ u.full_name or '' }}"
+            autocomplete="name"
+            class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-2.5 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        <div>
+          <label for="edit_role_{{ u.id }}" class="mb-1 block text-sm font-semibold text-on-surface">Role</label>
+          <select
+            name="edit_role"
+            id="edit_role_{{ u.id }}"
+            class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-2.5 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="staff" {% if u.role == 'staff' %}selected{% endif %}>Staff</option>
+            {% if is_admin %}
+            <option value="admin" {% if u.role == 'admin' %}selected{% endif %}>Administrator</option>
+            {% endif %}
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <input
+            type="checkbox"
+            name="edit_is_active"
+            id="edit_is_active_{{ u.id }}"
+            value="1"
+            class="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary/30"
+            {% if u.is_active %}checked{% endif %}
+          />
+          <label for="edit_is_active_{{ u.id }}" class="text-sm font-medium text-on-surface">Account active</label>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center justify-end gap-2 border-t border-outline-variant/15 px-5 py-4">
+        <button
+          type="button"
+          class="rounded-xl px-4 py-2.5 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-surface-container"
+          data-close-edit-user
+        >
+          Cancel
+        </button>
+        <button type="submit" class="bg-primary-gradient inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-on-primary shadow-md hover:opacity-90">
+          <span class="material-symbols-outlined text-lg">save</span>
+          Save changes
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div
+  id="reset-password-modal-{{ u.id }}"
+  class="reset-password-modal fixed inset-0 z-[100] hidden items-center justify-center bg-black/50 p-4"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="reset-password-modal-title-{{ u.id }}"
+  {% if open_reset_modal_user_id is defined and open_reset_modal_user_id is not none and open_reset_modal_user_id == u.id %}data-open-on-load="1"{% endif %}
+>
+  <div class="flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-outline-variant/20 bg-surface-container-lowest shadow-xl">
+    <form method="post" action="/users/{{ u.id }}/reset-password" class="flex flex-col">
+      <div class="flex items-center justify-between gap-3 border-b border-outline-variant/15 px-5 py-4">
+        <h2 id="reset-password-modal-title-{{ u.id }}" class="text-lg font-bold text-on-surface">Reset password</h2>
+        <button
+          type="button"
+          class="rounded-lg p-2 text-on-surface-variant transition-colors hover:bg-surface-container"
+          data-close-reset-password
+          aria-label="Close"
+        >
+          <span class="material-symbols-outlined text-2xl leading-none">close</span>
+        </button>
+      </div>
+      <div class="space-y-4 overflow-y-auto px-5 py-5">
+        <p class="text-sm text-on-surface-variant">
+          Set a new password for <strong class="text-on-surface">{{ u.username }}</strong> (for example if they forgot it). At least 6 characters.
+        </p>
+        <div>
+          <label for="reset_new_password_{{ u.id }}" class="mb-1 block text-sm font-semibold text-on-surface">New password</label>
+          <input
+            type="password"
+            name="new_password"
+            id="reset_new_password_{{ u.id }}"
+            required
+            minlength="6"
+            autocomplete="new-password"
+            class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-2.5 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        <div>
+          <label for="reset_confirm_password_{{ u.id }}" class="mb-1 block text-sm font-semibold text-on-surface">Confirm new password</label>
+          <input
+            type="password"
+            name="confirm_password"
+            id="reset_confirm_password_{{ u.id }}"
+            required
+            minlength="6"
+            autocomplete="new-password"
+            class="w-full rounded-xl border border-outline-variant/30 bg-surface px-4 py-2.5 text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center justify-end gap-2 border-t border-outline-variant/15 px-5 py-4">
+        <button
+          type="button"
+          class="rounded-xl px-4 py-2.5 text-sm font-semibold text-on-surface-variant transition-colors hover:bg-surface-container"
+          data-close-reset-password
+        >
+          Cancel
+        </button>
+        <button type="submit" class="bg-primary-gradient inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-on-primary shadow-md hover:opacity-90">
+          <span class="material-symbols-outlined text-lg">lock_reset</span>
+          Update password
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if permissions.users.write %}
+<script>
+  (function () {
+    var modal = document.getElementById("add-user-modal");
+    var openBtn = document.getElementById("open-add-user-modal");
+
+    function openAddModal() {
+      if (!modal) return;
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+      var first = modal.querySelector("#new_username");
+      if (first) {
+        setTimeout(function () {
+          first.focus();
+        }, 0);
+      }
+    }
+
+    function closeAddModal() {
+      if (!modal) return;
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+
+    if (modal) {
+      openBtn && openBtn.addEventListener("click", openAddModal);
+      modal.querySelectorAll("[data-close-add-user]").forEach(function (el) {
+        el.addEventListener("click", closeAddModal);
+      });
+      modal.addEventListener("click", function (e) {
+        if (e.target === modal) closeAddModal();
+      });
+      if (modal.dataset.openOnLoad === "1") openAddModal();
+    }
+
+    function openEditModal(id) {
+      var m = document.getElementById("edit-user-modal-" + id);
+      if (!m) return;
+      m.classList.remove("hidden");
+      m.classList.add("flex");
+      var inp = m.querySelector('input[name="edit_username"]');
+      if (inp) {
+        setTimeout(function () {
+          inp.focus();
+        }, 0);
+      }
+    }
+
+    function closeEditModal(m) {
+      m.classList.add("hidden");
+      m.classList.remove("flex");
+      var f = m.querySelector("form");
+      if (f) f.reset();
+    }
+
+    document.querySelectorAll("[data-open-edit-user]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-open-edit-user");
+        if (id) openEditModal(id);
+      });
+    });
+
+    document.querySelectorAll(".edit-user-modal").forEach(function (m) {
+      m.querySelectorAll("[data-close-edit-user]").forEach(function (el) {
+        el.addEventListener("click", function () {
+          closeEditModal(m);
+        });
+      });
+      m.addEventListener("click", function (e) {
+        if (e.target === m) closeEditModal(m);
+      });
+      if (m.dataset.openOnLoad === "1") {
+        var eid = m.id.replace("edit-user-modal-", "");
+        if (eid) openEditModal(eid);
+      }
+    });
+
+    function openResetModal(el) {
+      var id = el.getAttribute("data-open-reset-password");
+      if (!id) return;
+      var m = document.getElementById("reset-password-modal-" + id);
+      if (!m) return;
+      m.classList.remove("hidden");
+      m.classList.add("flex");
+      var pw = m.querySelector('input[name="new_password"]');
+      if (pw) {
+        setTimeout(function () {
+          pw.focus();
+        }, 0);
+      }
+    }
+
+    function closeResetModal(m) {
+      m.classList.add("hidden");
+      m.classList.remove("flex");
+      var f = m.querySelector("form");
+      if (f) f.reset();
+    }
+
+    document.querySelectorAll("[data-open-reset-password]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        openResetModal(btn);
+      });
+    });
+
+    document.querySelectorAll(".reset-password-modal").forEach(function (m) {
+      m.querySelectorAll("[data-close-reset-password]").forEach(function (el) {
+        el.addEventListener("click", function () {
+          closeResetModal(m);
+        });
+      });
+      m.addEventListener("click", function (e) {
+        if (e.target === m) closeResetModal(m);
+      });
+      if (m.dataset.openOnLoad === "1") {
+        m.classList.remove("hidden");
+        m.classList.add("flex");
+        var p0 = m.querySelector('input[name="new_password"]');
+        if (p0) {
+          setTimeout(function () {
+            p0.focus();
+          }, 0);
+        }
+      }
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      if (modal && !modal.classList.contains("hidden")) closeAddModal();
+      document.querySelectorAll(".edit-user-modal").forEach(function (m) {
+        if (!m.classList.contains("hidden")) closeEditModal(m);
+      });
+      document.querySelectorAll(".reset-password-modal").forEach(function (m) {
+        if (!m.classList.contains("hidden")) closeResetModal(m);
+      });
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

@@ -69,12 +69,26 @@
       />
     </div>
     <div class="col-span-full space-y-2">
-      <label class="block text-sm font-semibold tracking-wide text-on-surface-variant">Address *</label>
-      <input
-        name="address"
-        required
-        class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none transition-all focus:bg-white focus:ring-2 focus:ring-primary"
-      />
+      <label class="block text-sm font-semibold tracking-wide text-on-surface-variant" for="address-input">Address *</label>
+      <p class="text-xs text-on-surface-variant/80">
+        Start typing for suggestions (streets, subdivisions, barangay — add municipality for best results). You can always type the full address manually.
+      </p>
+      <div class="relative">
+        <input
+          id="address-input"
+          name="address"
+          required
+          autocomplete="off"
+          class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none transition-all focus:bg-white focus:ring-2 focus:ring-primary"
+        />
+        <ul
+          id="address-suggest-list"
+          class="absolute z-20 mt-1 hidden max-h-60 w-full overflow-auto rounded-lg border border-outline-variant/20 bg-white py-1 shadow-lg"
+          role="listbox"
+          hidden
+        ></ul>
+      </div>
+      <p id="address-suggest-attrib" class="hidden text-xs text-on-surface-variant/70"></p>
     </div>
     <div class="space-y-2">
       <label class="block text-sm font-semibold tracking-wide text-on-surface-variant">Name of Project</label>
@@ -99,11 +113,16 @@
       ></textarea>
     </div>
     <div class="space-y-2">
-      <label class="block text-sm font-semibold tracking-wide text-on-surface-variant">LC Status</label>
-      <input
+      <label class="block text-sm font-semibold tracking-wide text-on-surface-variant" for="lc-status">LC Status</label>
+      <select
+        id="lc-status"
         name="lc_status"
         class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none transition-all focus:bg-white focus:ring-2 focus:ring-primary"
-      />
+      >
+        {% for val, label in lc_status_options %}
+        <option value="{{ val }}">{{ label }}</option>
+        {% endfor %}
+      </select>
     </div>
     <div class="space-y-2">
       <label class="block text-sm font-semibold tracking-wide text-on-surface-variant">Date Granted</label>
@@ -124,4 +143,130 @@
     </button>
   </div>
 </form>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var input = document.getElementById("address-input");
+  var list = document.getElementById("address-suggest-list");
+  var attrib = document.getElementById("address-suggest-attrib");
+  if (!input || !list) return;
+
+  var debounceMs = 400;
+  var minChars = 3;
+  var timer = null;
+  var activeIndex = -1;
+
+  function hideList() {
+    list.classList.add("hidden");
+    list.hidden = true;
+    list.innerHTML = "";
+    activeIndex = -1;
+  }
+
+  function showAttrib(provider) {
+    if (!attrib) return;
+    if (provider === "nominatim" || provider === "osm") {
+      attrib.textContent =
+        "Search: OpenStreetMap (Nominatim + Photon) — map data © OpenStreetMap contributors.";
+      attrib.classList.remove("hidden");
+    } else if (provider === "google") {
+      attrib.textContent = "Search powered by Google Places.";
+      attrib.classList.remove("hidden");
+    } else {
+      attrib.classList.add("hidden");
+    }
+  }
+
+  function renderItems(items, provider) {
+    list.innerHTML = "";
+    items.forEach(function (item, i) {
+      var li = document.createElement("li");
+      li.setAttribute("role", "option");
+      li.setAttribute("id", "addr-opt-" + i);
+      li.className =
+        "cursor-pointer px-3 py-2 text-sm text-on-surface hover:bg-primary/10 border-b border-outline-variant/10 last:border-0";
+      li.textContent = item.label || item.value;
+      li.addEventListener("mousedown", function (e) {
+        e.preventDefault();
+        input.value = item.value || item.label;
+        hideList();
+        attrib.classList.add("hidden");
+      });
+      list.appendChild(li);
+    });
+    if (items.length) {
+      list.classList.remove("hidden");
+      list.hidden = false;
+      showAttrib(provider);
+    } else {
+      hideList();
+      attrib.classList.add("hidden");
+    }
+  }
+
+  function fetchSuggestions() {
+    var q = input.value.trim();
+    if (q.length < minChars) {
+      hideList();
+      attrib.classList.add("hidden");
+      return;
+    }
+    fetch("/api/address-suggest?q=" + encodeURIComponent(q), { credentials: "same-origin" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("bad response");
+        return r.json();
+      })
+      .then(function (data) {
+        var items = data.suggestions || [];
+        renderItems(items, data.provider || "none");
+      })
+      .catch(function () {
+        hideList();
+        attrib.classList.add("hidden");
+      });
+  }
+
+  input.addEventListener("input", function () {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(fetchSuggestions, debounceMs);
+  });
+
+  input.addEventListener("keydown", function (e) {
+    if (list.hidden || !list.children.length) return;
+    var opts = list.querySelectorAll("li");
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      activeIndex = Math.min(activeIndex + 1, opts.length - 1);
+      updateActive(opts);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      activeIndex = Math.max(activeIndex - 1, 0);
+      updateActive(opts);
+    } else if (e.key === "Enter" && activeIndex >= 0) {
+      e.preventDefault();
+      opts[activeIndex].dispatchEvent(new MouseEvent("mousedown"));
+    } else if (e.key === "Escape") {
+      hideList();
+      attrib.classList.add("hidden");
+    }
+  });
+
+  function updateActive(opts) {
+    opts.forEach(function (el, i) {
+      if (i === activeIndex) {
+        el.classList.add("bg-primary/15");
+      } else {
+        el.classList.remove("bg-primary/15");
+      }
+    });
+  }
+
+  document.addEventListener("click", function (e) {
+    if (e.target !== input && !list.contains(e.target)) {
+      hideList();
+    }
+  });
+})();
+</script>
 {% endblock %}

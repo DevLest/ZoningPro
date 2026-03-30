@@ -15,9 +15,8 @@
     }
     body.print-copy-owner .slip-file-copy { display: none; }
     body.print-copy-file .slip-owner-copy { display: none; }
-    .slip-border { border: 2px solid #1e293b; }
-    .field-line { border-bottom: 1px solid #334155; min-height: 1.25rem; }
-    .total-row { border-top: 3px double #1e293b; }
+    .slip-outer { border: 2px solid #0f172a; }
+    .slip-cell { border: 1px solid #0f172a; }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-900 print:bg-white print-copy-{{ print_copy }}">
@@ -43,104 +42,122 @@
 
   <div class="mx-auto max-w-6xl px-3 pb-10 print:max-w-none print:px-4">
     <div class="grid grid-cols-1 gap-6 print:grid-cols-2 print:gap-4 lg:grid-cols-2">
-      {% for label in ["OWNER'S COPY", "FILE COPY"] %}
-      <article class="slip-sheet slip-border bg-white p-4 font-serif text-[11px] leading-snug shadow-sm print:shadow-none {% if loop.first %}slip-owner-copy{% else %}slip-file-copy{% endif %}">
-        <header class="flex gap-3 border-b border-slate-300 pb-3">
-          <img src="/static/img/seal-binalbagan.png" alt="Seal" width="72" height="72" class="h-[72px] w-[72px] shrink-0 object-contain print:h-16 print:w-16"/>
-          <div class="flex-1 text-center">
-            <p class="text-[10px] leading-tight">Republic of the Philippines</p>
-            <p class="text-[11px] font-semibold leading-tight">Municipality of Binalbagan</p>
-            <p class="mt-0.5 text-[10px] font-bold uppercase tracking-wide leading-tight">Municipal Planning &amp; Development Office</p>
-            <p class="mt-2 text-[9px] font-semibold uppercase tracking-widest text-slate-600">{{ label }}</p>
+      {% for _ in [1, 2] %}
+      <article class="slip-sheet slip-outer bg-white p-3 font-sans text-[10px] leading-tight text-slate-900 shadow-sm print:shadow-none {% if loop.first %}slip-owner-copy{% else %}slip-file-copy{% endif %}">
+        <header class="flex gap-2 pb-2">
+          <img src="/static/{{ print_branding.logo_static_relpath }}" alt="" width="64" height="64" class="h-16 w-16 shrink-0 object-contain print:h-[4.5rem] print:w-[4.5rem]"/>
+          <div class="flex min-h-[4rem] flex-1 flex-col justify-center text-center">
+            <p class="text-[9px] leading-tight">{{ print_branding.republic_label }}</p>
+            <p class="text-[10px] font-semibold leading-tight">{{ print_branding.municipality_label }}</p>
+            <p class="mt-0.5 text-[9px] font-bold uppercase tracking-wide leading-tight">{{ print_branding.office_label }}</p>
           </div>
         </header>
 
-        <div class="mt-3 flex justify-between gap-2 border border-slate-400 px-2 py-1 text-[10px]">
-          <span><span class="font-semibold">Date:</span> {{ app_date }}</span>
-          <span><span class="font-semibold">CTRL. No.:</span> {{ app.lc_ctrl_no }}</span>
+        <table class="w-full border-collapse border-2 border-slate-900 text-[10px]">
+          <tr>
+            <td class="slip-cell px-2 py-1 font-semibold" colspan="2">Date:</td>
+            <td class="slip-cell px-2 py-1" colspan="2">{{ app_date }}</td>
+            <td class="slip-cell px-2 py-1 font-semibold" colspan="2">CTRL. No.:</td>
+            <td class="slip-cell px-2 py-1 font-mono" colspan="2">{{ app.lc_ctrl_no }}</td>
+          </tr>
+          <tr>
+            <td class="slip-cell px-2 py-2 text-center text-[10px] font-bold uppercase tracking-wide" colspan="8">Application for Locational Clearance</td>
+          </tr>
+          <tr>
+            <td class="slip-cell px-2 py-1 text-center text-[11px] font-bold" colspan="8">Computation Slip</td>
+          </tr>
+          <tr>
+            <td class="slip-cell px-2 py-1 font-semibold" colspan="2">Applicant:</td>
+            <td class="slip-cell px-2 py-1" colspan="6">{{ app.applicant_name }}</td>
+          </tr>
+          <tr>
+            <td class="slip-cell px-2 py-1 font-semibold" colspan="2">Address:</td>
+            <td class="slip-cell px-2 py-1" colspan="6">{{ app.address }}</td>
+          </tr>
+          <tr>
+            <td class="slip-cell px-2 py-1 font-semibold" colspan="2">Project:</td>
+            <td class="slip-cell px-2 py-1" colspan="6">{{ app.project_name or '—' }}</td>
+          </tr>
+          <tr>
+            <td class="slip-cell px-2 py-1 font-semibold" colspan="2">Location:</td>
+            <td class="slip-cell px-2 py-1" colspan="6">{{ app.project_location or '—' }}</td>
+          </tr>
+          <tr>
+            <td class="slip-cell px-2 py-1 font-semibold" colspan="2">Lot Area:</td>
+            <td class="slip-cell px-2 py-1" colspan="6">{{ lot_display }} SQ. Meters</td>
+          </tr>
+          <tr>
+            <td class="slip-cell px-2 py-1 font-semibold" colspan="2">Project Type:</td>
+            <td class="slip-cell px-2 py-1 font-bold uppercase" colspan="6">{{ project_type_label }}</td>
+          </tr>
+          <tr>
+            <td class="slip-cell px-2 py-1 font-semibold" colspan="2">Project Cost:</td>
+            <td class="slip-cell px-2 py-1" colspan="6">
+              <div class="flex items-baseline justify-end gap-3">
+                <span class="inline-block w-8 text-center font-bold">P</span>
+                <span class="min-w-[6rem] text-right font-bold">{{ "%.2f"|format(app.project_cost) }}</span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="slip-cell px-2 py-2 text-center text-[10px] font-bold uppercase" colspan="8">ASSESSMENT</td>
+          </tr>
+          <tr>
+            <td class="slip-cell px-2 py-1 font-bold uppercase" colspan="8">Fees:</td>
+          </tr>
+          <tr>
+            <td class="slip-cell px-2 py-1 pl-4" colspan="5">LC Fee:</td>
+            <td class="slip-cell px-2 py-1 text-right font-mono tabular-nums" colspan="3">{{ "%.2f"|format(display.lc_fee) }}</td>
+          </tr>
+          <tr>
+            <td class="slip-cell px-2 py-1 pl-4" colspan="5">Surcharge:</td>
+            <td class="slip-cell px-2 py-1 text-right font-mono tabular-nums" colspan="3">{% if display.surcharge %}{{ "%.2f"|format(display.surcharge) }}{% else %}—{% endif %}</td>
+          </tr>
+          <tr>
+            <td class="slip-cell px-2 py-1 pl-4" colspan="5">Zoning Certification:</td>
+            <td class="slip-cell px-2 py-1 text-right font-mono tabular-nums" colspan="3">{% if display.zoning_waived %}0.00 <span class="text-slate-600">(waived)</span>{% else %}{{ "%.2f"|format(display.zoning_cert) }}{% endif %}</td>
+          </tr>
+          <tr>
+            <td class="slip-cell border-t-2 border-slate-900 px-2 py-1.5 font-bold" colspan="5">Total Assessment:</td>
+            <td class="slip-cell border-t-2 border-slate-900 px-2 py-1.5" colspan="3">
+              <div class="flex items-baseline justify-end gap-2">
+                <span class="w-6 text-center font-bold">P</span>
+                <span class="min-w-[6rem] text-right font-mono text-[11px] font-bold tabular-nums">{{ "%.2f"|format(display.total) }}</span>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td class="slip-cell align-top px-2 py-3" colspan="4">
+              <p class="font-semibold">Assessed:</p>
+              <div class="mt-10 border-b border-slate-700"></div>
+            </td>
+            <td class="slip-cell align-top px-2 py-3 text-center" colspan="4">
+              <p class="mb-2 text-left font-semibold">Approved:</p>
+              <p class="text-[10px] font-bold leading-tight">{{ print_branding.signatory_name }}</p>
+              <p class="mt-0.5 text-[9px]">{{ print_branding.signatory_role }}</p>
+            </td>
+          </tr>
+        </table>
+
+        <div class="mt-2 flex flex-wrap items-start justify-between gap-3">
+          <p class="max-w-[60%] text-[9px] leading-snug"><span class="font-semibold">Note:</span> Please pay at the Municipal Treasurer's Office</p>
+          <div class="text-right text-[8px] leading-tight">
+            {% if display.surcharge and (display.surcharge | round(2)) == 5000 %}
+            <p>ILLEGAL CONSTRUCTION: <span class="font-mono">P 2,500.00</span></p>
+            <p>NO LOCATIONAL CLEARANCE: <span class="font-mono">P 2,500.00</span></p>
+            <p class="mt-1 border-t border-slate-800 pt-0.5 font-bold">TOTAL: <span class="font-mono">P 5,000.00</span></p>
+            {% elif display.surcharge and display.surcharge > 0 %}
+            <p class="font-semibold uppercase tracking-wide">Surcharge detail</p>
+            <p class="mt-0.5 font-bold">TOTAL: <span class="font-mono">P {{ "%.2f"|format(display.surcharge) }}</span></p>
+            {% endif %}
+          </div>
         </div>
-
-        <p class="mt-3 text-center text-[10px] font-bold uppercase tracking-wide">Application for Locational Clearance</p>
-        <p class="mt-1 text-center text-[11px] font-bold">Computation Slip</p>
-
-        <dl class="mt-4 space-y-2">
-          <div class="flex gap-2">
-            <dt class="w-20 shrink-0 font-semibold">Applicant:</dt>
-            <dd class="field-line flex-1 px-1">{{ app.applicant_name }}</dd>
-          </div>
-          <div class="flex gap-2">
-            <dt class="w-20 shrink-0 font-semibold">Address:</dt>
-            <dd class="field-line flex-1 px-1">{{ app.address }}</dd>
-          </div>
-          <div class="flex gap-2">
-            <dt class="w-20 shrink-0 font-semibold">Project:</dt>
-            <dd class="field-line flex-1 px-1">{{ app.project_name or '—' }}</dd>
-          </div>
-          <div class="flex gap-2">
-            <dt class="w-20 shrink-0 font-semibold">Location:</dt>
-            <dd class="field-line flex-1 px-1">{{ app.project_location or '—' }}</dd>
-          </div>
-          <div class="flex gap-2">
-            <dt class="w-20 shrink-0 font-semibold">Lot Area:</dt>
-            <dd class="field-line flex-1 px-1">{{ lot_display }} <span class="text-slate-600">SQ. Meters</span></dd>
-          </div>
-          <div class="pt-1 text-center">
-            <p class="text-[10px] font-semibold">Project Type:</p>
-            <p class="mt-0.5 text-[12px] font-bold uppercase tracking-wide">{{ project_type_label }}</p>
-          </div>
-          <div class="flex flex-wrap items-baseline gap-2 pt-1">
-            <span class="font-semibold">Project Cost:</span>
-            <span class="text-[12px] font-bold">P</span>
-            <span class="field-line min-w-[8rem] flex-1 px-1 text-[12px] font-bold">{{ "%.2f"|format(app.project_cost) }}</span>
-          </div>
-        </dl>
-
-        <div class="mt-4">
-          <p class="text-[11px] font-bold">ASSESSMENT</p>
-          <p class="mt-1 text-[10px] font-bold">FEES:</p>
-          <table class="mt-1 w-full border-collapse border border-slate-600 text-[10px]">
-            <tbody>
-              <tr>
-                <td class="border border-slate-500 px-2 py-1">LC Fee</td>
-                <td class="border border-slate-500 px-2 py-1 text-right font-mono">{{ "%.2f"|format(display.lc_fee) }}</td>
-              </tr>
-              <tr>
-                <td class="border border-slate-500 px-2 py-1">Surcharge</td>
-                <td class="border border-slate-500 px-2 py-1 text-right font-mono">{% if display.surcharge %}{{ "%.2f"|format(display.surcharge) }}{% else %}&nbsp;{% endif %}</td>
-              </tr>
-              <tr>
-                <td class="border border-slate-500 px-2 py-1">Zoning Certification</td>
-                <td class="border border-slate-500 px-2 py-1 text-right font-mono">{% if display.zoning_waived %}0.00 <span class="text-slate-600">(waived)</span>{% else %}{{ "%.2f"|format(display.zoning_cert) }}{% endif %}</td>
-              </tr>
-              <tr class="total-row font-bold">
-                <td class="border border-slate-600 px-2 py-1.5">Total Assessment</td>
-                <td class="border border-slate-600 px-2 py-1.5 text-right font-mono">P {{ "%.2f"|format(display.total) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="mt-6 grid grid-cols-2 gap-3 text-[10px]">
-          <div>
-            <p class="font-semibold">Assessed:</p>
-            <div class="mt-6 border-b border-slate-400"></div>
-          </div>
-          <div>
-            <p class="font-semibold">Approved:</p>
-            <div class="mt-2 text-center">
-              <p class="font-semibold leading-tight">PEARL ANGELI P. FUENTES, EnP</p>
-              <p class="text-[9px]">Zoning Administrator</p>
-            </div>
-          </div>
-        </div>
-        <p class="mt-4 text-center text-[9px] text-slate-600">Please pay at the Municipal Treasurer's Office</p>
-        <p class="mt-2 text-[8px] text-slate-400">Template: {{ meta.sheet_name }}</p>
       </article>
       {% endfor %}
     </div>
 
     {% if app.template_id == 'residential_200k_plus' %}
-    <section class="scratchpad no-print mt-6 slip-border bg-amber-50/80 p-4 font-mono text-[10px]">
+    <section class="scratchpad no-print mt-6 slip-outer bg-amber-50/80 p-4 font-mono text-[10px]">
       <p class="mb-2 font-sans text-xs font-bold text-slate-800">Excel worksheet check (columns K, L, M → LC Fee)</p>
       <p class="mb-2 font-sans text-[10px] text-slate-600">Residential ₱200K+: K17 = project cost − ₱200,000 · K18 = K17 × 1% · K19 = K18 ÷ 10 (one-tenth) · <strong>LC Fee = 720 + K19</strong> (same as 720 + excess × 0.001)</p>
       <div class="overflow-x-auto">

@@ -8,14 +8,13 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from app.config import MUNICIPALITY, OFFICE, ZC_ADMIN
-from app.fees.registry import get_template
+from app.settings_store import logo_fs_path
 
 
-def format_peso(n: float) -> str:
-    return f"₱{n:,.2f}"
+def format_peso_plain(n: float) -> str:
+    return f"{n:,.2f}"
 
 
 def build_assessment_pdf(
@@ -36,73 +35,196 @@ def build_assessment_pdf(
     zoning: float,
     total: float,
     zoning_waived: bool = False,
+    branding: dict[str, str] | None = None,
 ) -> None:
+    del template_id  # PDF matches official slip; no Excel metadata line.
+    b = branding or {}
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    meta = get_template(template_id)
     styles = getSampleStyleSheet()
-    title = ParagraphStyle(
-        "t",
+    tiny = ParagraphStyle(
+        "tiny",
         parent=styles["Normal"],
-        fontSize=9,
+        fontName="Helvetica",
+        fontSize=8,
+        leading=10,
+    )
+    tiny_b = ParagraphStyle(
+        "tiny_b",
+        parent=tiny,
+        fontName="Helvetica-Bold",
+    )
+    tiny_center = ParagraphStyle(
+        "tiny_c",
+        parent=tiny,
         alignment=1,
-        spaceAfter=4,
     )
-    body = ParagraphStyle(
-        "b",
-        parent=styles["Normal"],
-        fontSize=9,
-        leading=12,
+    tiny_center_b = ParagraphStyle(
+        "tiny_cb",
+        parent=tiny_b,
+        alignment=1,
+    )
+    tiny_right = ParagraphStyle(
+        "tiny_r",
+        parent=tiny,
+        alignment=2,
+        fontName="Courier",
+    )
+    tiny_right_b = ParagraphStyle(
+        "tiny_rb",
+        parent=tiny_right,
+        fontName="Courier-Bold",
     )
 
-    story = []
-    story.append(Paragraph("Republic of the Philippines", title))
-    story.append(Paragraph(MUNICIPALITY, title))
-    story.append(Paragraph(OFFICE, title))
-    story.append(Spacer(1, 0.15 * inch))
-    story.append(Paragraph("<b>APPLICATION FOR LOCATIONAL CLEARANCE</b> — Computation Slip", title))
-    story.append(Paragraph(f"<b>Excel template:</b> {meta.sheet_name}", body))
-    story.append(Spacer(1, 0.12 * inch))
+    black = colors.HexColor("#0f172a")
+    seal_path = logo_fs_path(b.get("logo_static_relpath", ""))
+    header_cells = []
+    if seal_path.is_file():
+        header_cells.append(Image(str(seal_path), width=0.62 * inch, height=0.62 * inch))
+    else:
+        header_cells.append(Paragraph("", tiny))
+    rep = (b.get("republic_label") or "Republic of the Philippines").replace("&", "&amp;")
+    mun = (b.get("municipality_label") or "").replace("&", "&amp;")
+    off = (b.get("office_label") or "").replace("&", "&amp;")
+    header_cells.append(
+        Paragraph(
+            f"{rep}<br/>"
+            f"<b>{mun}</b><br/>"
+            f"<b>{off}</b>",
+            ParagraphStyle("hdr", parent=tiny_center, fontSize=8, leading=10, spaceBefore=2),
+        )
+    )
+    header_table = Table([header_cells], colWidths=[0.72 * inch, 5.1 * inch])
+    header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (1, 0), (1, 0), "CENTER")]))
 
-    info_data = [
-        ["Date:", app_date, "CTRL. No.:", ctrl_no],
-        ["Applicant:", applicant, "", ""],
-        ["Address:", address, "", ""],
-        ["Project:", project, "", ""],
-        ["Location:", location, "", ""],
-        ["Lot Area:", lot_area, "SQ. Meters", ""],
-        ["Project Type:", project_type_label, "", ""],
-        ["Project Cost:", format_peso(project_cost), "", ""],
+    story = [header_table, Spacer(1, 0.08 * inch)]
+
+    def cell(txt: str, style: ParagraphStyle = tiny) -> Paragraph:
+        return Paragraph(txt.replace("&", "&amp;"), style)
+
+    zoning_txt = "0.00 (waived)" if zoning_waived else format_peso_plain(zoning)
+
+    inner = [
+        [
+            cell("Date:", tiny_b),
+            cell(app_date, tiny),
+            cell("CTRL. No.:", tiny_b),
+            cell(ctrl_no, ParagraphStyle("mono", parent=tiny, fontName="Courier")),
+        ],
+        [
+            cell("<b>Application for Locational Clearance</b>", tiny_center_b),
+            "",
+            "",
+            "",
+        ],
+        [cell("<b>Computation Slip</b>", ParagraphStyle("cs", parent=tiny_center_b, fontSize=9)), "", "", ""],
+        [cell("Applicant:", tiny_b), cell(applicant, tiny), "", ""],
+        [cell("Address:", tiny_b), cell(address, tiny), "", ""],
+        [cell("Project:", tiny_b), cell(project or "—", tiny), "", ""],
+        [cell("Location:", tiny_b), cell(location or "—", tiny), "", ""],
+        [cell("Lot Area:", tiny_b), cell(f"{lot_area} SQ. Meters", tiny), "", ""],
+        [cell("Project Type:", tiny_b), cell(project_type_label.upper(), tiny_b), "", ""],
+        [
+            cell("Project Cost:", tiny_b),
+            Table(
+                [
+                    [
+                        Paragraph("", tiny),
+                        Paragraph("<b>P</b>", ParagraphStyle("pc", parent=tiny_center_b, fontSize=9)),
+                        Paragraph(f"<b>{format_peso_plain(project_cost)}</b>", ParagraphStyle("pv", parent=tiny_right_b, fontSize=9)),
+                    ]
+                ],
+                colWidths=[2.4 * inch, 0.35 * inch, 1.1 * inch],
+            ),
+            "",
+            "",
+        ],
+        [cell("<b>ASSESSMENT</b>", tiny_center_b), "", "", ""],
+        [cell("<b>FEES:</b>", tiny_b), "", "", ""],
+        [cell("&nbsp;&nbsp;&nbsp;&nbsp;LC Fee:", tiny), "", Paragraph(format_peso_plain(lc_fee), tiny_right), ""],
+        [cell("&nbsp;&nbsp;&nbsp;&nbsp;Surcharge:", tiny), "", Paragraph(format_peso_plain(surcharge) if surcharge else "—", tiny_right), ""],
+        [
+            cell("&nbsp;&nbsp;&nbsp;&nbsp;Zoning Certification:", tiny),
+            "",
+            Paragraph(zoning_txt, tiny_right),
+            "",
+        ],
+        [
+            cell("<b>Total Assessment:</b>", tiny_b),
+            "",
+            Table(
+                [
+                    [
+                        Paragraph("", tiny),
+                        Paragraph("<b>P</b>", ParagraphStyle("t1", parent=tiny_center_b, fontSize=9)),
+                        Paragraph(f"<b>{format_peso_plain(total)}</b>", ParagraphStyle("t2", parent=tiny_right_b, fontSize=9)),
+                    ]
+                ],
+                colWidths=[2.4 * inch, 0.35 * inch, 1.1 * inch],
+            ),
+            "",
+        ],
     ]
-    t1 = Table([[Paragraph(str(a), body) for a in row[:2]] for row in info_data], colWidths=[1.1 * inch, 5 * inch])
-    t1.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
-    story.append(t1)
-    story.append(Spacer(1, 0.15 * inch))
-    story.append(Paragraph("<b>ASSESSMENT</b>", body))
-    zoning_label = f"{format_peso(zoning)} (waived)" if zoning_waived else format_peso(zoning)
-    fee_rows = [
-        ["FEES:", ""],
-        ["LC Fee:", format_peso(lc_fee)],
-        ["Surcharge:", format_peso(surcharge)],
-        ["Zoning Certification:", zoning_label],
-        ["Total Assessment:", format_peso(total)],
-    ]
-    t2 = Table([[Paragraph(a, body), Paragraph(b, body)] for a, b in fee_rows], colWidths=[2 * inch, 2.5 * inch])
-    t2.setStyle(
+
+    sig_left = Paragraph("<b>Assessed:</b><br/><br/><br/>_________________________", tiny)
+    sig_name = (b.get("signatory_name") or "").replace("&", "&amp;")
+    sig_role = (b.get("signatory_role") or "Zoning Administrator").replace("&", "&amp;")
+    sig_right = Paragraph(
+        f"<b>Approved:</b><br/><br/><b>{sig_name}</b><br/><i>{sig_role}</i>",
+        ParagraphStyle("sig", parent=tiny, alignment=1, fontSize=8),
+    )
+    inner.append([sig_left, "", sig_right, ""])
+
+    # Merge columns for wide rows: use a simpler 4-col table
+    t_inner = Table(
+        inner,
+        colWidths=[1.1 * inch, 2.5 * inch, 1.0 * inch, 1.1 * inch],
+    )
+    t_inner.setStyle(
         TableStyle(
             [
-                ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f3f4f6")),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("GRID", (0, 0), (-1, -1), 0.5, black),
+                ("SPAN", (0, 1), (3, 1)),
+                ("SPAN", (0, 2), (3, 2)),
+                ("SPAN", (1, 3), (3, 3)),
+                ("SPAN", (1, 4), (3, 4)),
+                ("SPAN", (1, 5), (3, 5)),
+                ("SPAN", (1, 6), (3, 6)),
+                ("SPAN", (1, 7), (3, 7)),
+                ("SPAN", (1, 8), (3, 8)),
+                ("SPAN", (1, 9), (3, 9)),
+                ("SPAN", (0, 10), (3, 10)),
+                ("SPAN", (0, 11), (3, 11)),
+                ("SPAN", (2, 12), (3, 12)),
+                ("SPAN", (2, 13), (3, 13)),
+                ("SPAN", (2, 14), (3, 14)),
+                ("SPAN", (2, 15), (3, 15)),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("SPAN", (0, 16), (1, 16)),
+                ("SPAN", (2, 16), (3, 16)),
             ]
         )
     )
-    story.append(t2)
-    story.append(Spacer(1, 0.25 * inch))
-    story.append(Paragraph(f"Assessed: _________________ &nbsp; Approved: _________________", body))
-    story.append(Spacer(1, 0.2 * inch))
-    story.append(Paragraph(f"<b>{ZC_ADMIN}</b><br/>Zoning Administrator", title))
-    story.append(Spacer(1, 0.15 * inch))
-    story.append(Paragraph("Please pay at the Municipal Treasurer's Office", body))
+
+    story.append(t_inner)
+
+    footer_note = Paragraph("<b>Note:</b> Please pay at the Municipal Treasurer's Office", tiny)
+    if round(surcharge, 2) == 5000:
+        sur_footer = Paragraph(
+            "ILLEGAL CONSTRUCTION: P 2,500.00<br/>NO LOCATIONAL CLEARANCE: P 2,500.00<br/><br/><b>TOTAL: P 5,000.00</b>",
+            ParagraphStyle("sf", parent=tiny, alignment=2, fontSize=7, leading=9),
+        )
+    elif surcharge and surcharge > 0:
+        sur_footer = Paragraph(
+            f"<b>Surcharge detail</b><br/><b>TOTAL: P {format_peso_plain(surcharge)}</b>",
+            ParagraphStyle("sf2", parent=tiny, alignment=2, fontSize=7, leading=9),
+        )
+    else:
+        sur_footer = Paragraph("", tiny)
+
+    foot = Table([[footer_note, sur_footer]], colWidths=[3.5 * inch, 2.5 * inch])
+    foot.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+    story.append(Spacer(1, 0.06 * inch))
+    story.append(foot)
 
     doc = SimpleDocTemplate(
         str(out_path),

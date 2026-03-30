@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.fees.registry import get_template
+from app.settings_store import get_zoning_certification_price
 
 
 @dataclass
@@ -29,13 +30,21 @@ def compute_fees(
     project_cost: float,
     lot_area_sqm: float | None = None,
     optional_units: float | None = None,
+    *,
+    zoning_cert_price: float | None = None,
 ) -> FeeResult:
+    """Compute fees. *zoning_cert_price* defaults to Settings → zoning certification amount (default ₱720)."""
+    zcp = float(zoning_cert_price) if zoning_cert_price is not None else get_zoning_certification_price()
     meta = get_template(template_id)
     cost = float(project_cost)
     lot = float(lot_area_sqm) if lot_area_sqm is not None else 0.0
     units = float(optional_units) if optional_units is not None else 0.0
 
-    b: dict[str, Any] = {"project_cost": cost, "template_id": template_id}
+    b: dict[str, Any] = {
+        "project_cost": cost,
+        "template_id": template_id,
+        "zoning_certification_price": zcp,
+    }
 
     lc = sur = zc = 0.0
 
@@ -58,7 +67,7 @@ def compute_fees(
         k17, k18, k19 = _excess_chain(cost, 200_000.0)
         lc = 720.0 + k19
         sur = 0.0
-        zc = 720.0
+        zc = zcp
         b["k17_excess_over_200k"] = k17
         b["k18_one_percent_of_excess"] = k18
         b["k19_one_tenth_of_one_percent"] = k19
@@ -80,7 +89,7 @@ def compute_fees(
         k17, k18, k19 = _excess_chain(cost, 2_000_000.0)
         lc = 3600.0 + k19
         sur = 0.0
-        zc = 720.0
+        zc = zcp
         b.update({"k17": k17, "k18": k18, "k19": k19})
 
     elif template_id == "dormitory_2m":
@@ -92,7 +101,7 @@ def compute_fees(
         k17, k18, k19 = _excess_chain(cost, 2_000_000.0)
         lc = 3600.0 + k19
         sur = 0.0
-        zc = 720.0
+        zc = zcp
         b.update({"k17": k17, "k18": k18, "k19": k19})
 
     elif template_id == "commercial_100k":
@@ -108,12 +117,12 @@ def compute_fees(
     elif template_id == "commercial_500k_plus":
         lc = 2880.0
         sur = 0.0
-        zc = 720.0
+        zc = zcp
 
     elif template_id == "commercial_1m_plus":
         lc = 4320.0
         sur = 0.0
-        zc = 720.0
+        zc = zcp
 
     elif template_id == "commercial_2m_plus":
         k17, k18, k19 = _excess_chain(cost, 2_000_000.0)
@@ -125,13 +134,13 @@ def compute_fees(
     elif template_id == "institutional_2m":
         lc = 2880.0
         sur = 0.0
-        zc = 720.0
+        zc = zcp
 
     elif template_id == "institutional_2m_plus":
         k17, k18, k19 = _excess_chain(cost, 2_000_000.0)
         lc = 2880.0 + k19
         sur = 0.0
-        zc = (lot / 10_000.0) * 720.0
+        zc = (lot / 10_000.0) * zcp
         b.update({"k17": k17, "k18": k18, "k19": k19, "lot_area_sqm": lot})
 
     elif template_id == "special_use_2m":
@@ -142,7 +151,7 @@ def compute_fees(
     elif template_id == "special_use_2m_plus":
         lc = 7200.0 + (cost * 0.001)
         sur = 0.0
-        zc = 720.0
+        zc = zcp
         b["cost_component_0_1pct"] = cost * 0.001
 
     else:

@@ -1,9 +1,33 @@
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Float, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Float, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(256))
+    full_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    #: "admin" = full access; "staff" = access from role_permissions (staff row).
+    role: Mapped[str] = mapped_column(String(32), default="staff", index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class RolePermission(Base):
+    __tablename__ = "role_permissions"
+    __table_args__ = (UniqueConstraint("role", "module_key", name="uq_role_module"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    role: Mapped[str] = mapped_column(String(32), index=True)
+    module_key: Mapped[str] = mapped_column(String(64), index=True)
+    can_read: Mapped[bool] = mapped_column(Boolean, default=True)
+    can_write: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class LCApplication(Base):

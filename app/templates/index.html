@@ -6,6 +6,7 @@
     <h1 class="mb-2 text-4xl font-extrabold tracking-tight text-on-surface">Project Overview</h1>
     <p class="text-lg text-on-surface-variant">Recent locational clearance applications and totals.</p>
   </div>
+  {% if permissions.applications.write %}
   <a
     href="/applications/new"
     class="bg-primary-gradient inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-bold text-on-primary shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]"
@@ -13,6 +14,7 @@
     <span class="material-symbols-outlined">add_circle</span>
     New Application
   </a>
+  {% endif %}
 </header>
 
 <div class="mb-10 grid grid-cols-1 gap-6 md:grid-cols-4">
