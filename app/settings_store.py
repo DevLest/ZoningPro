@@ -33,7 +33,7 @@ def _default_print_profile() -> dict[str, str]:
         "office_label": OFFICE,
         "logo_static_relpath": "img/seal-binalbagan.png",
         "signatory_name": ZC_ADMIN,
-        "signatory_role": "Zoning Administrator",
+        "signatory_role": "MPDC/Zoning Administrator",
     }
 
 

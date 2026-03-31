@@ -29,6 +29,16 @@ def lc_application_allows_lc_prefill(lc_status: str | None) -> bool:
     return (lc_status or "").strip().casefold() == "paid"
 
 
+def lc_case_id_for_application(db: Session, lc_application_id: int) -> int | None:
+    """Most recent LC case linked to a fee application, if any."""
+    return db.scalar(
+        select(LocationalClearanceCase.id)
+        .where(LocationalClearanceCase.lc_application_id == lc_application_id)
+        .order_by(LocationalClearanceCase.id.desc())
+        .limit(1)
+    )
+
+
 def lc_case_locked_to_paid_fee_application(db: Session, lc_application_id: int | None) -> bool:
     if lc_application_id is None:
         return False
@@ -244,6 +254,9 @@ def lc_new_get(
                 url=f"/applications/{lc_application}/assessment?lc_forms=locked",
                 status_code=303,
             )
+        existing_case_id = lc_case_id_for_application(db, lc_application)
+        if existing_case_id is not None:
+            return RedirectResponse(url=f"/locational-clearance/{existing_case_id}", status_code=303)
         prefill = _prefill_from_lc_application(db, lc_application)
         if prefill.get("reuse_applicant"):
             reuse_applicant = prefill["reuse_applicant"]

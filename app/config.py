@@ -10,7 +10,7 @@ EXPORTS_DIR = PROJECT_ROOT / "exports"
 DB_PATH = DATA_DIR / "zoning.db"
 
 MUNICIPALITY = "Municipality of Binalbagan"
-OFFICE = "MUNICIPAL PLANNING & DEVELOPMENT OFFICE"
+OFFICE = "MUNICIPAL PLANNING AND DEVELOPMENT OFFICE"
 ZC_ADMIN = "PEARL ANGELI P. FUENTES, EnP"
 
 # Optional: Google Cloud API key with Places API enabled. If unset, address suggestions use

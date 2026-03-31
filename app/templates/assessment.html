@@ -25,9 +25,9 @@
     {% if permissions.locational_clearance.read %}
       {% if lc_forms_from_application_enabled %}
     <a
-      href="/locational-clearance/new?lc_application={{ app.id }}"
+      href="{% if lc_case_for_application_id %}/locational-clearance/{{ lc_case_for_application_id }}{% else %}/locational-clearance/new?lc_application={{ app.id }}{% endif %}"
       class="inline-flex items-center gap-2 rounded-xl border border-outline-variant/20 bg-surface-container-low px-5 py-2.5 text-sm font-semibold text-on-surface hover:bg-surface-container-high"
-      title="Open locational clearance forms (LC 1, 2, Form 03) with applicant and project prefilled from this application"
+      title="{% if lc_case_for_application_id %}Open the locational clearance case linked to this application{% else %}Create locational clearance forms (Application, Decision, and Zoning Certification) with applicant and project prefilled from this application{% endif %}"
     >
       <span class="material-symbols-outlined">description</span>
       LC forms
@@ -300,13 +300,6 @@
         data-address="{{ app.address|e }}"
       >
         <div id="assessment-map" class="relative z-0 h-48 w-full overflow-hidden rounded-lg border border-outline-variant/20 bg-surface-container-highest"></div>
-        <button
-          type="button"
-          id="assessment-map-try-geocode"
-          class="rounded-lg border border-outline-variant/40 bg-surface-container-lowest px-3 py-2 text-xs font-bold text-primary hover:bg-surface-container {% if app.address_lat is not none and app.address_lon is not none %}hidden{% endif %}"
-        >
-          Approximate location
-        </button>
       </div>
     </div>
     <div class="rounded-xl border border-tertiary/20 bg-tertiary-container/10 p-6">
@@ -1129,9 +1122,10 @@
 (function () {
   var wrap = document.getElementById("assessment-map-wrap");
   var mapEl = document.getElementById("assessment-map");
-  var tryBtn = document.getElementById("assessment-map-try-geocode");
   if (!wrap || !mapEl) return;
 
+  var approxLat = 10.195;
+  var approxLon = 122.858;
   var savedLat = parseFloat(wrap.getAttribute("data-lat") || "");
   var savedLon = parseFloat(wrap.getAttribute("data-lon") || "");
   var address = wrap.getAttribute("data-address") || "";
@@ -1162,28 +1156,31 @@
     });
   }
 
+  function showApproximate() {
+    showMap(approxLat, approxLon);
+  }
+
+  function geocodeAndShow() {
+    return fetch("/api/geocode-forward?q=" + encodeURIComponent(address), { credentials: "same-origin" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("bad");
+        return r.json();
+      })
+      .then(function (j) {
+        if (j.lat != null && j.lon != null) showMap(j.lat, j.lon);
+        else showApproximate();
+      })
+      .catch(function () {
+        showApproximate();
+      });
+  }
+
   if (!isNaN(savedLat) && !isNaN(savedLon)) {
     showMap(savedLat, savedLon);
-  } else if (tryBtn) {
-    tryBtn.addEventListener("click", function () {
-      if (!address.trim()) return;
-      tryBtn.disabled = true;
-      fetch("/api/geocode-forward?q=" + encodeURIComponent(address), { credentials: "same-origin" })
-        .then(function (r) {
-          if (!r.ok) throw new Error("bad");
-          return r.json();
-        })
-        .then(function (j) {
-          if (j.lat != null && j.lon != null) {
-            showMap(j.lat, j.lon);
-            tryBtn.classList.add("hidden");
-          }
-        })
-        .catch(function () {})
-        .finally(function () {
-          tryBtn.disabled = false;
-        });
-    });
+  } else if (address.trim()) {
+    geocodeAndShow();
+  } else {
+    showApproximate();
   }
 })();
 </script>

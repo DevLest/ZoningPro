@@ -3,98 +3,184 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>LC Form 2 — {{ c.application_number or c.id }}</title>
+  <title>Decision on Zoning — {{ c.application_number or c.id }}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @media print { .no-print { display: none !important; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
     .cell { border: 1px solid #0f172a; }
+    .fill-data { color: #b91c1c; }
+    @media print { .fill-data { color: #b91c1c !important; } }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-900 print:bg-white">
+  {% if request.query_params.get('embed') != '1' %}
   <div class="no-print mx-auto max-w-4xl px-4 py-4">
     <button type="button" onclick="window.print()" class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white">Print or Save as PDF</button>
     <a href="/locational-clearance/{{ c.id }}" class="ml-3 text-sm text-emerald-800 hover:underline">Back to case</a>
   </div>
-  <div class="mx-auto max-w-4xl px-4 pb-10 font-sans text-[11px] leading-snug print:max-w-none">
-    <article class="border-2 border-slate-900 bg-white p-4 print:border-black">
-      <header class="mb-3 flex gap-3 border-b pb-3">
-        <img src="/static/{{ print_branding.logo_static_relpath }}" alt="" width="64" height="64" class="h-16 w-16 shrink-0 object-contain"/>
-        <div class="flex-1 text-center">
-          <p class="text-[10px]">{{ print_branding.republic_label }}</p>
-          <p class="text-[11px] font-semibold">{{ print_branding.municipality_label }}</p>
-          <p class="text-[10px] font-bold uppercase">{{ print_branding.office_label }}</p>
-        </div>
-      </header>
-      <p class="mb-4 text-center text-[10px] font-bold">LC Form 2</p>
-      <div class="mb-3 grid grid-cols-2 gap-2 text-[10px]">
-        <div class="cell px-2 py-1"><span class="font-semibold">Application No.</span> {{ c.application_number or "—" }}</div>
-        <div class="cell px-2 py-1 text-right">{{ print_branding.republic_label }}</div>
-        <div class="cell px-2 py-1"><span class="font-semibold">Date of Receipt</span> {% if c.date_of_receipt %}{{ c.date_of_receipt.strftime("%m/%d/%Y") }}{% else %}—{% endif %}</div>
-        <div class="cell px-2 py-1 text-right">{{ print_branding.municipality_label }}</div>
-        <div class="cell px-2 py-1"><span class="font-semibold">Decision No.</span> {{ c.decision_number or "—" }}</div>
-        <div class="cell px-2 py-1 text-right">{{ print_branding.office_label }}</div>
-        <div class="cell px-2 py-1"><span class="font-semibold">Date of Issue</span> {% if c.decision_date %}{{ c.decision_date.strftime("%m/%d/%Y") }}{% elif c.or_date %}{{ c.or_date.strftime("%m/%d/%Y") }}{% else %}—{% endif %}</div>
-        <div class="cell px-2 py-1"></div>
-      </div>
-      <p class="mb-2 text-center text-[12px] font-bold">DECISION ON ZONING</p>
-      <table class="w-full border-collapse border-2 border-slate-900 text-[10px]">
+  {% endif %}
+  <div class="mx-auto max-w-4xl px-4 pb-10 font-sans text-[10px] leading-snug print:max-w-none">
+    <article class="border-2 border-slate-900 bg-white p-3 print:border-black">
+
+      {# Top: left = control nos., right = logo + LGU header #}
+      <table class="mb-0 w-full border-collapse border-2 border-slate-900">
         <tr>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">NAME OF APPLICANT</td>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">NAME OF CORPORATION</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.applicant_line }}</td>
-          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.corporation_line }}</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">ADDRESS OF APPLICANT</td>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">ADDRESS OF CORPORATION</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.applicant_address }}</td>
-          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.corporation_address or "—" }}</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">TYPE OF PROJECT</td>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">AREAS</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.project_title }}</td>
-          <td class="cell px-2 py-2 align-top" colspan="2">
-            Bldg. Area: {% if c.building_area_sqm is not none %}{{ "{:,.2f}".format(c.building_area_sqm) }}{% else %}0{% endif %} sq.m.<br/>
-            Lot Area: {% if c.lot_area_sqm is not none %}{{ "{:,.2f}".format(c.lot_area_sqm) }}{% else %}—{% endif %} sq.m.<br/>
-            Location: {{ c.project_location or "—" }}
+          <td class="cell align-top p-0" style="width: 42%;">
+            <table class="w-full border-collapse text-[10px]">
+              <tr>
+                <td class="cell border-slate-900 bg-slate-50 px-2 py-1 font-semibold">Application No.</td>
+                <td class="cell fill-data px-2 py-1 font-semibold">{{ c.application_number or "—" }}</td>
+              </tr>
+              <tr>
+                <td class="cell border-slate-900 bg-slate-50 px-2 py-1 font-semibold">Date of Receipt</td>
+                <td class="cell fill-data px-2 py-1 font-semibold">{% if c.date_of_receipt %}{{ c.date_of_receipt.strftime("%m/%d/%Y") }}{% else %}—{% endif %}</td>
+              </tr>
+              <tr>
+                <td class="cell border-slate-900 bg-slate-50 px-2 py-1 font-semibold">Decision No.</td>
+                <td class="cell fill-data px-2 py-1 font-semibold">{{ c.decision_number or "—" }}</td>
+              </tr>
+              <tr>
+                <td class="cell border-slate-900 bg-slate-50 px-2 py-1 font-semibold">Date of Issue</td>
+                <td class="cell fill-data px-2 py-1 font-semibold">{% if c.decision_date %}{{ c.decision_date.strftime("%m/%d/%Y") }}{% elif c.or_date %}{{ c.or_date.strftime("%m/%d/%Y") }}{% else %}—{% endif %}</td>
+              </tr>
+            </table>
           </td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">DECISION</td>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">RIGHT OVER LAND</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-2 align-top font-bold" colspan="2">{{ c.decision_headline or "LOCATIONAL CLEARANCE GRANTED" }}</td>
-          <td class="cell px-2 py-2 align-top" colspan="2">
-            {% if c.right_over_land == 'owner' %}☑ Owner{% else %}☐ Owner{% endif %}
-            {% if c.right_over_land == 'lessee' %}☑ Lessee{% else %}☐ Lessee{% endif %}
-            {% if c.right_over_land == 'other' %}☑ Other: {{ c.right_over_land_other or "" }}{% endif %}<br/>
-            TCT/OCT No.: {{ c.tct_oct_number or "—" }}
+          <td class="cell align-middle p-2">
+            <div class="flex items-center justify-center gap-3">
+              <img src="/static/{{ print_branding.logo_static_relpath }}" alt="" width="72" height="72" class="h-[72px] w-[72px] shrink-0 object-contain"/>
+              <div class="text-center leading-tight">
+                <p>{{ print_branding.republic_label }}</p>
+                <p>Province of Negros Occidental</p>
+                <p class="font-semibold">{{ print_branding.municipality_label }}</p>
+                <p class="mt-1 text-[11px] font-bold uppercase tracking-wide">{{ print_branding.office_label }}</p>
+              </div>
+            </div>
           </td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-1 font-semibold" colspan="4">ADDITIONAL CONDITIONS / REQUIREMENTS</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-3 align-top whitespace-pre-wrap" colspan="4">{{ c.additional_conditions or "—" }}</td>
         </tr>
       </table>
-      <div class="mt-6 text-center text-[10px]">
-        <p class="font-semibold">{{ print_branding.signatory_name }}</p>
-        <p>{{ print_branding.signatory_role }}</p>
+
+      <div class="cell border-t-0 border-slate-900 bg-slate-100 px-2 py-2 text-center text-[12px] font-bold tracking-wide">
+        DECISION ON ZONING
       </div>
-      <div class="mt-6 grid grid-cols-3 gap-2 border-t pt-2 text-[10px]">
-        <div>Paid under O.R. No. {{ c.or_number or "—" }}</div>
-        <div>Date Issued {% if c.or_date %}{{ c.or_date.strftime("%m/%d/%Y") }}{% else %}—{% endif %}</div>
-        <div>Amount {% if c.amount_paid is not none %}{{ "{:,.2f}".format(c.amount_paid) }}{% else %}—{% endif %}</div>
+
+      {# Applicant / Corporation #}
+      <table class="w-full border-collapse border-2 border-t-0 border-slate-900 text-[10px]">
+        <tr>
+          <td class="cell w-1/2 px-2 py-1 font-semibold">NAME OF APPLICANT (Last, First, Middle)</td>
+          <td class="cell w-1/2 px-2 py-1 font-semibold">NAME OF CORPORATION</td>
+        </tr>
+        <tr>
+          <td class="cell fill-data px-2 py-2 align-top font-semibold">{{ c.applicant_line }}</td>
+          <td class="cell fill-data px-2 py-2 align-top font-semibold">{{ c.corporation_line }}</td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-1 font-semibold">ADDRESS OF APPLICANT</td>
+          <td class="cell px-2 py-1 font-semibold">ADDRESS OF CORPORATION</td>
+        </tr>
+        <tr>
+          <td class="cell fill-data px-2 py-2 align-top font-semibold">{{ c.applicant_address }}</td>
+          <td class="cell fill-data px-2 py-2 align-top font-semibold">{{ c.corporation_address or "—" }}</td>
+        </tr>
+      </table>
+
+      {# Project + areas #}
+      <table class="w-full border-collapse border-2 border-t-0 border-slate-900 text-[10px]">
+        <tr>
+          <td class="cell align-top px-2 py-1 font-semibold" rowspan="3" style="width: 52%;">
+            <span class="block">TYPE OF PROJECT</span>
+            <span class="fill-data mt-1 block font-semibold leading-snug">{{ c.project_title }}</span>
+          </td>
+          <td class="cell whitespace-nowrap px-2 py-1 text-right font-semibold" style="width: 22%;">Bldg. Area:</td>
+          <td class="cell fill-data px-2 py-1 font-semibold" style="width: 26%;">
+            {% if c.building_area_sqm is not none %}{{ "{:,.2f}".format(c.building_area_sqm) }}{% else %}—{% endif %} <span class="font-normal text-slate-900">Square meters</span>
+          </td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-1 text-right font-semibold">Lot Area:</td>
+          <td class="cell fill-data px-2 py-1 font-semibold">
+            {% if c.lot_area_sqm is not none %}{{ "{:,.2f}".format(c.lot_area_sqm) }}{% else %}—{% endif %} <span class="font-normal text-slate-900">Square meters</span>
+          </td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-1 text-right font-semibold align-top">Location:</td>
+          <td class="cell fill-data px-2 py-2 align-top font-semibold">{{ c.project_location or "—" }}</td>
+        </tr>
+      </table>
+
+      {# Decision + right over land #}
+      <table class="w-full border-collapse border-2 border-t-0 border-slate-900 text-[10px]">
+        <tr>
+          <td class="cell w-1/2 px-2 py-1 font-semibold align-top">DECISION</td>
+          <td class="cell w-1/2 px-2 py-1 font-semibold align-top">RIGHT OVER LAND</td>
+        </tr>
+        <tr>
+          <td class="cell fill-data px-3 py-3 align-top text-[11px] font-bold italic">
+            {% set dh = (c.decision_headline or "LOCATIONAL CLEARANCE GRANTED") | trim %}
+            {{ dh.upper() }}
+          </td>
+          <td class="cell px-2 py-2 align-top">
+            <table class="w-full border-collapse text-[10px]">
+              <tr>
+                <td class="cell border-slate-900 px-2 py-1">Owner</td>
+                <td class="cell border-slate-900 px-2 py-1 text-center font-bold">{% if c.right_over_land == 'owner' %}x{% else %}{% endif %}</td>
+              </tr>
+              <tr>
+                <td class="cell border-slate-900 px-2 py-1">Lessee</td>
+                <td class="cell border-slate-900 px-2 py-1 text-center font-bold">{% if c.right_over_land == 'lessee' %}x{% else %}{% endif %}</td>
+              </tr>
+              <tr>
+                <td class="cell border-slate-900 px-2 py-1" colspan="2">Others (specify): {{ c.right_over_land_other or "" }}{% if c.right_over_land == 'other' %} <span class="font-bold">x</span>{% endif %}</td>
+              </tr>
+              <tr>
+                <td class="cell border-slate-900 px-2 py-1 font-semibold" colspan="2">TCT/OCT No.: <span class="fill-data font-semibold">{{ c.tct_oct_number or "—" }}</span></td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      {# Standard conditions #}
+      <div class="cell border-2 border-t-0 border-slate-900 px-2 py-2">
+        <p class="mb-1 font-bold">CONDITIONS:</p>
+        <table class="w-full border-collapse text-[9px]">
+          <tr><td class="w-6 border border-slate-400 py-0.5 text-center font-bold">X</td><td class="border border-slate-400 px-2 py-0.5">Compliance with the Comprehensive Land Use Plan and Zoning Ordinance of the municipality.</td></tr>
+          <tr><td class="border border-slate-400 py-0.5 text-center font-bold">X</td><td class="border border-slate-400 px-2 py-0.5">Development shall conform to approved plans and to applicable national and local laws.</td></tr>
+          <tr><td class="border border-slate-400 py-0.5 text-center font-bold">X</td><td class="border border-slate-400 px-2 py-0.5">No change in land use or project scope without prior written approval from the MPDC.</td></tr>
+          <tr><td class="border border-slate-400 py-0.5 text-center font-bold">X</td><td class="border border-slate-400 px-2 py-0.5">Environmental, health, safety, and building regulations shall be observed.</td></tr>
+          <tr><td class="border border-slate-400 py-0.5 text-center font-bold">X</td><td class="border border-slate-400 px-2 py-0.5">Required permits (building, sanitary, etc.) shall be secured before construction or occupancy.</td></tr>
+          <tr><td class="border border-slate-400 py-0.5 text-center font-bold">X</td><td class="border border-slate-400 px-2 py-0.5">This Decision is valid only for the project and location described herein.</td></tr>
+          <tr><td class="border border-slate-400 py-0.5 text-center font-bold">X</td><td class="border border-slate-400 px-2 py-0.5">Misrepresentation or material falsehood shall be cause for cancellation.</td></tr>
+          <tr><td class="border border-slate-400 py-0.5 text-center font-bold">X</td><td class="border border-slate-400 px-2 py-0.5">Other applicable requirements of national agencies and the LGU shall be complied with.</td></tr>
+        </table>
+        <p class="mb-1 mt-2 font-bold">ADDITIONAL CONDITIONS / REQUIREMENTS:</p>
+        <div class="cell min-h-[3rem] whitespace-pre-wrap border border-slate-900 px-2 py-2 text-[10px]">{{ c.additional_conditions or "" }}</div>
       </div>
+
+      {# Signatory + payment #}
+      <table class="w-full border-collapse border-2 border-t-0 border-slate-900 text-[10px]">
+        <tr>
+          <td class="cell p-3 align-top" style="width: 55%;">
+            <table class="border-collapse border border-slate-900 text-[10px]">
+              <tr>
+                <td class="cell bg-slate-50 px-2 py-1 font-semibold">Paid under O.R. No.</td>
+                <td class="cell fill-data px-2 py-1 font-semibold">{{ c.or_number or "—" }}</td>
+              </tr>
+              <tr>
+                <td class="cell bg-slate-50 px-2 py-1 font-semibold">Date Issued</td>
+                <td class="cell fill-data px-2 py-1 font-semibold">{% if c.or_date %}{{ c.or_date.strftime("%m/%d/%Y") }}{% else %}—{% endif %}</td>
+              </tr>
+              <tr>
+                <td class="cell bg-slate-50 px-2 py-1 font-semibold">Amount Paid</td>
+                <td class="cell fill-data px-2 py-1 font-semibold">{% if c.amount_paid is not none %}₱ {{ "{:,.2f}".format(c.amount_paid) }}{% else %}—{% endif %}</td>
+              </tr>
+            </table>
+          </td>
+          <td class="cell px-3 pb-3 pt-14 text-center text-[10px] align-top">
+            <p class="font-bold">{{ print_branding.signatory_name }}</p>
+            <p>{{ print_branding.signatory_role }}</p>
+          </td>
+        </tr>
+      </table>
     </article>
   </div>
 </body>

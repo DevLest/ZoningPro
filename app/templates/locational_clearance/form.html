@@ -16,13 +16,13 @@
 <div class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
   <div>
     <h1 class="mb-2 text-4xl font-extrabold tracking-tight text-on-surface">{% if is_edit %}Edit LC case{% else %}New LC case{% endif %}</h1>
-    <p class="max-w-2xl text-on-surface-variant">LC Form 1 (application), Form 2 (decision), and Form 03 (zoning certification). Applicant data is shared with the rest of the app.</p>
+    <p class="max-w-2xl text-on-surface-variant">Application, Decision, and Zoning Certification. Applicant data is shared with the rest of the app.</p>
   </div>
   {% if is_edit and c %}
   <div class="flex flex-wrap gap-2">
-    <a href="/locational-clearance/{{ c.id }}/print/application" target="_blank" class="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant/20 bg-surface-container-low px-4 py-2 text-sm font-semibold text-on-surface hover:bg-surface-container-high">Form 1</a>
-    <a href="/locational-clearance/{{ c.id }}/print/decision" target="_blank" class="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant/20 bg-surface-container-low px-4 py-2 text-sm font-semibold text-on-surface hover:bg-surface-container-high">Form 2</a>
-    <a href="/locational-clearance/{{ c.id }}/print/certification" target="_blank" class="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant/20 bg-surface-container-low px-4 py-2 text-sm font-semibold text-on-surface hover:bg-surface-container-high">Form 03</a>
+    <button type="button" class="lc-print-trigger inline-flex items-center gap-1.5 rounded-lg border border-outline-variant/20 bg-surface-container-low px-4 py-2 text-sm font-semibold text-on-surface hover:bg-surface-container-high" data-lc-print-title="Application form" data-lc-print-href="/locational-clearance/{{ c.id }}/print/application">Application</button>
+    <button type="button" class="lc-print-trigger inline-flex items-center gap-1.5 rounded-lg border border-outline-variant/20 bg-surface-container-low px-4 py-2 text-sm font-semibold text-on-surface hover:bg-surface-container-high" data-lc-print-title="Decision" data-lc-print-href="/locational-clearance/{{ c.id }}/print/decision">Decision</button>
+    <button type="button" class="lc-print-trigger inline-flex items-center gap-1.5 rounded-lg border border-outline-variant/20 bg-surface-container-low px-4 py-2 text-sm font-semibold text-on-surface hover:bg-surface-container-high" data-lc-print-title="Zoning certification" data-lc-print-href="/locational-clearance/{{ c.id }}/print/certification">Zoning certification</button>
   </div>
   {% endif %}
 </div>
@@ -121,7 +121,7 @@
   </section>
 
   <section class="space-y-6">
-    <h2 class="flex items-center gap-2 text-lg font-bold text-primary"><span class="material-symbols-outlined">construction</span> Project (Form 1)</h2>
+    <h2 class="flex items-center gap-2 text-lg font-bold text-primary"><span class="material-symbols-outlined">construction</span> Application Form</h2>
     <div class="space-y-2">
       <label class="block text-sm font-semibold text-on-surface-variant">Project type / title *</label>
       <input name="project_title" required value="{{ c.project_title if c else (p.project_title or '') }}" {% if lock %}readonly{% endif %} class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary {% if lock %}{{ ro }}{% endif %}" />
@@ -229,7 +229,7 @@
   </section>
 
   <section class="space-y-6">
-    <h2 class="flex items-center gap-2 text-lg font-bold text-primary"><span class="material-symbols-outlined">gavel</span> Decision (Form 2)</h2>
+    <h2 class="flex items-center gap-2 text-lg font-bold text-primary"><span class="material-symbols-outlined">gavel</span> Decision</h2>
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
       <div class="space-y-2">
         <label class="block text-sm font-semibold text-on-surface-variant">Decision no.</label>
@@ -271,7 +271,7 @@
   </section>
 
   <section class="space-y-6">
-    <h2 class="flex items-center gap-2 text-lg font-bold text-primary"><span class="material-symbols-outlined">verified</span> Zoning certification (Form 03)</h2>
+    <h2 class="flex items-center gap-2 text-lg font-bold text-primary"><span class="material-symbols-outlined">verified</span>Zoning certification</h2>
     <div class="space-y-2">
       <label class="block text-sm font-semibold text-on-surface-variant">Parcel(s) situated at</label>
       <textarea name="cert_parcel_location" rows="2" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" placeholder="Full address / lot description">{% if c %}{{ c.cert_parcel_location or '' }}{% elif p.project_location %}{{ p.project_location }}{% endif %}</textarea>
@@ -317,6 +317,26 @@
     <a href="/locational-clearance/" class="rounded-xl border border-outline-variant/20 px-8 py-3 text-sm font-semibold text-on-surface hover:bg-surface-container-high">Cancel</a>
   </div>
 </form>
+
+{% if is_edit and c %}
+<div id="lc-print-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/50 p-4 backdrop-blur-sm" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="lc-print-modal-title">
+  <div class="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-outline-variant/20 bg-surface-container-lowest shadow-xl">
+    <div class="flex items-center justify-between gap-3 border-b border-outline-variant/15 px-4 py-3">
+      <h2 id="lc-print-modal-title" class="text-lg font-bold text-on-surface">Print preview</h2>
+      <div class="flex flex-wrap items-center gap-2">
+        <button type="button" id="lc-print-modal-print" class="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-on-primary hover:opacity-90">
+          <span class="material-symbols-outlined text-base">print</span>
+          Print
+        </button>
+        <button type="button" id="lc-print-modal-close" class="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant/20 bg-surface-container-low px-4 py-2 text-sm font-semibold text-on-surface hover:bg-surface-container-high">
+          Close
+        </button>
+      </div>
+    </div>
+    <iframe id="lc-print-modal-frame" class="min-h-[60vh] w-full flex-1 bg-white" title="Print preview"></iframe>
+  </div>
+</div>
+{% endif %}
 
 {% if not lock %}
 <script>
@@ -379,6 +399,67 @@
   });
   document.addEventListener("click", function (e) {
     if (!list.contains(e.target) && e.target !== input) hide();
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{# `c` is only set inside `block content`; use `case_row` here so the script is actually emitted. #}
+{% if is_edit and case_row %}
+<script>
+(function () {
+  const modal = document.getElementById("lc-print-modal");
+  const frame = document.getElementById("lc-print-modal-frame");
+  const titleEl = document.getElementById("lc-print-modal-title");
+  const btnClose = document.getElementById("lc-print-modal-close");
+  const btnPrint = document.getElementById("lc-print-modal-print");
+  if (!modal || !frame || !btnClose || !btnPrint) return;
+
+  function embedUrl(href) {
+    const u = new URL(href, window.location.origin);
+    u.searchParams.set("embed", "1");
+    return u.pathname + u.search;
+  }
+
+  function openModal(href, title) {
+    if (titleEl && title) titleEl.textContent = title;
+    frame.src = embedUrl(href);
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeModal() {
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+    modal.setAttribute("aria-hidden", "true");
+    frame.src = "about:blank";
+    document.body.style.overflow = "";
+  }
+
+  document.querySelectorAll(".lc-print-trigger").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      const href = btn.getAttribute("data-lc-print-href");
+      const title = btn.getAttribute("data-lc-print-title") || "Print preview";
+      if (href) openModal(href, title);
+    });
+  });
+
+  btnClose.addEventListener("click", closeModal);
+  modal.addEventListener("click", function (e) {
+    if (e.target === modal) closeModal();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !modal.classList.contains("hidden")) closeModal();
+  });
+  btnPrint.addEventListener("click", function () {
+    try {
+      frame.contentWindow && frame.contentWindow.focus();
+      frame.contentWindow && frame.contentWindow.print();
+    } catch (err) {}
   });
 })();
 </script>

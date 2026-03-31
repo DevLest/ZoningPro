@@ -99,7 +99,7 @@ class LCApplication(Base):
 
 
 class LocationalClearanceCase(Base):
-    """LC Form 1 (application), Form 2 (decision), and Form 03 (zoning certification) — one saved case."""
+    """Application, Decision, and Zoning Certification — one saved case."""
 
     __tablename__ = "locational_clearance_cases"
 

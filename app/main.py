@@ -56,7 +56,7 @@ from app.settings_store import (
 )
 from app.ui_context import merge_shell, shell_for_application
 from app.locational_clearance import router as locational_clearance_router
-from app.locational_clearance.router import lc_application_allows_lc_prefill
+from app.locational_clearance.router import lc_application_allows_lc_prefill, lc_case_id_for_application
 
 PROJECT_TYPE_DISPLAY = {
     "residential": "RESIDENTIAL",
@@ -1083,6 +1083,7 @@ def assessment_get(
             "lc_status_known": LC_STATUS_KNOWN,
             "fee_display_json": json.dumps(_display_fees_dict(display)),
             "lc_forms_from_application_enabled": lc_application_allows_lc_prefill(row.lc_status),
+            "lc_case_for_application_id": lc_case_id_for_application(db, app_id),
             "categories": list_categories(),
             "templates_grouped": grouped,
             "cat_labels": cat_labels,
