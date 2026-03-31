@@ -117,17 +117,17 @@
           {% if display.surcharge_lines %}
           <tr>
             <td class="slip-cell align-top px-2 py-1 pl-4" colspan="5">
-              <p class="font-bold">Surcharge</p>
               {% if display.surcharge_itemized %}
-              <div class="mt-1 space-y-0.5 pl-2">
+              <div class="space-y-2">
                 {% for line in display.surcharge_lines %}
-                <div class="flex justify-between gap-2 text-[10px] leading-tight">
-                  <span>{{ line.name }}</span>
-                  <span class="font-mono tabular-nums">{{ "%.2f"|format(line.price) }}</span>
+                <div class="{% if not loop.first %}border-t border-slate-200 pt-2{% endif %}">
+                  <p class="font-bold">Surcharge</p>
+                  <p class="mt-0.5 text-[10px] text-slate-600">{{ line.name }}</p>
                 </div>
                 {% endfor %}
               </div>
               {% else %}
+              <p class="font-bold">Surcharge</p>
               <p class="mt-0.5 pl-2 text-[10px] text-slate-600">Per template rules</p>
               {% endif %}
             </td>

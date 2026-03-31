@@ -38,24 +38,53 @@
 </div>
 
 <div class="overflow-hidden rounded-xl border border-outline-variant/10 bg-surface-container-lowest shadow-sm">
-  <div class="flex items-center justify-between border-b border-surface-container-high px-6 py-5">
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-surface-container-high px-6 py-5">
     <h3 class="text-lg font-bold text-on-surface">Recent Applications</h3>
-    <a href="{{ navbar_export_href }}" class="text-sm font-bold text-primary hover:underline">Export Excel</a>
+    <a id="overview-export-link" href="{{ navbar_export_href }}" class="text-sm font-bold text-primary hover:underline">Export Excel</a>
+  </div>
+  <div class="grid grid-cols-1 gap-3 border-b border-surface-container-high px-6 py-4 md:grid-cols-3">
+    <div>
+      <label for="overview-filter-status" class="mb-1 block text-xs font-bold uppercase tracking-wide text-on-surface-variant">Status</label>
+      <select id="overview-filter-status" class="w-full rounded-lg border border-outline-variant/30 bg-surface-container-low px-3 py-2 text-sm text-on-surface">
+        <option value="">All statuses</option>
+      </select>
+    </div>
+    <div>
+      <label for="overview-filter-date-from" class="mb-1 block text-xs font-bold uppercase tracking-wide text-on-surface-variant">Date from</label>
+      <input id="overview-filter-date-from" type="date" class="w-full rounded-lg border border-outline-variant/30 bg-surface-container-low px-3 py-2 text-sm text-on-surface" />
+    </div>
+    <div>
+      <label for="overview-filter-date-to" class="mb-1 block text-xs font-bold uppercase tracking-wide text-on-surface-variant">Date to</label>
+      <input id="overview-filter-date-to" type="date" class="w-full rounded-lg border border-outline-variant/30 bg-surface-container-low px-3 py-2 text-sm text-on-surface" />
+    </div>
   </div>
   <div class="overflow-x-auto">
     <table class="w-full text-left text-sm">
       <thead class="bg-surface-container-low text-xs font-bold uppercase tracking-wider text-on-surface-variant">
         <tr>
+          <th class="px-6 py-4 w-10">
+            <input id="overview-check-all" type="checkbox" class="h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary" checked />
+          </th>
           <th class="px-6 py-4">Ctrl #</th>
           <th class="px-6 py-4">Applicant</th>
           <th class="px-6 py-4">Date</th>
+          <th class="px-6 py-4">Status</th>
           <th class="px-6 py-4 text-right">Total</th>
           <th class="px-6 py-4"></th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-surface-container-high">
+      <tbody id="overview-table-body" class="divide-y divide-surface-container-high">
         {% for a in applications %}
-        <tr class="transition-colors hover:bg-teal-50/30">
+        <tr
+          class="transition-colors hover:bg-teal-50/30"
+          data-application-row
+          data-id="{{ a.id }}"
+          data-date="{{ a.date_of_application.isoformat() if a.date_of_application else '' }}"
+          data-status="{{ (a.lc_status or '')|lower }}"
+        >
+          <td class="px-6 py-4">
+            <input type="checkbox" class="overview-row-check h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary" checked />
+          </td>
           <td class="px-6 py-4 font-mono text-xs font-bold text-primary">{{ a.lc_ctrl_no }}</td>
           <td class="px-6 py-4 font-medium text-on-surface">
             {% if a.applicant %}
@@ -65,6 +94,7 @@
             {% endif %}
           </td>
           <td class="px-6 py-4 text-on-surface-variant">{{ a.date_of_application }}</td>
+          <td class="px-6 py-4 text-on-surface-variant">{{ a.lc_status or "—" }}</td>
           <td class="px-6 py-4 text-right font-mono">
             {% if a.total is not none %}₱{{ "%.2f"|format(a.total) }}{% else %}—{% endif %}
           </td>
@@ -78,11 +108,158 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="5" class="px-6 py-12 text-center text-on-surface-variant">No applications yet. Create one to begin.</td>
+          <td colspan="7" class="px-6 py-12 text-center text-on-surface-variant">No applications yet. Create one to begin.</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var rows = Array.prototype.slice.call(document.querySelectorAll("[data-application-row]"));
+  if (!rows.length) return;
+
+  var statusFilter = document.getElementById("overview-filter-status");
+  var dateFromFilter = document.getElementById("overview-filter-date-from");
+  var dateToFilter = document.getElementById("overview-filter-date-to");
+  var checkAll = document.getElementById("overview-check-all");
+  var exportLink = document.getElementById("overview-export-link");
+  var baseExportHref = exportLink ? exportLink.getAttribute("href") || "/export/applications.xlsx" : "/export/applications.xlsx";
+
+  function statusLabel(row) {
+    var cell = row.children[4];
+    if (!cell) return "Unknown";
+    var t = (cell.textContent || "").trim();
+    return t && t !== "—" ? t : "Unknown";
+  }
+
+  function fillStatusOptions() {
+    if (!statusFilter) return;
+    var map = {};
+    rows.forEach(function (row) {
+      var key = (row.getAttribute("data-status") || "").trim() || "unknown";
+      map[key] = statusLabel(row);
+    });
+    var keys = Object.keys(map).sort();
+    keys.forEach(function (key) {
+      var opt = document.createElement("option");
+      opt.value = key === "unknown" ? "__unknown__" : key;
+      opt.textContent = map[key];
+      statusFilter.appendChild(opt);
+    });
+  }
+
+  function rowVisible(row) {
+    return !row.classList.contains("hidden");
+  }
+
+  function matchFilters(row) {
+    var rowStatus = (row.getAttribute("data-status") || "").trim();
+    var rowDate = (row.getAttribute("data-date") || "").trim();
+    var selectedStatus = statusFilter ? (statusFilter.value || "").trim() : "";
+    var from = dateFromFilter ? (dateFromFilter.value || "").trim() : "";
+    var to = dateToFilter ? (dateToFilter.value || "").trim() : "";
+    var statusOk = !selectedStatus || (selectedStatus === "__unknown__" ? !rowStatus : rowStatus === selectedStatus);
+    var fromOk = !from || (rowDate && rowDate >= from);
+    var toOk = !to || (rowDate && rowDate <= to);
+    return statusOk && fromOk && toOk;
+  }
+
+  function visibleRows() {
+    return rows.filter(rowVisible);
+  }
+
+  function setCheckedForVisible(checked) {
+    visibleRows().forEach(function (row) {
+      var cb = row.querySelector(".overview-row-check");
+      if (cb) cb.checked = checked;
+    });
+  }
+
+  function syncHeaderCheckState() {
+    if (!checkAll) return;
+    var vis = visibleRows();
+    if (!vis.length) {
+      checkAll.checked = false;
+      checkAll.indeterminate = false;
+      return;
+    }
+    var checkedCount = 0;
+    vis.forEach(function (row) {
+      var cb = row.querySelector(".overview-row-check");
+      if (cb && cb.checked) checkedCount += 1;
+    });
+    checkAll.checked = checkedCount === vis.length;
+    checkAll.indeterminate = checkedCount > 0 && checkedCount < vis.length;
+  }
+
+  function selectedVisibleIds() {
+    var ids = [];
+    visibleRows().forEach(function (row) {
+      var cb = row.querySelector(".overview-row-check");
+      if (!cb || !cb.checked) return;
+      var id = row.getAttribute("data-id");
+      if (id) ids.push(id);
+    });
+    return ids;
+  }
+
+  function refreshExportHref() {
+    if (!exportLink) return;
+    var ids = selectedVisibleIds();
+    if (!ids.length) {
+      exportLink.href = baseExportHref;
+      return;
+    }
+    exportLink.href = baseExportHref + "?ids=" + encodeURIComponent(ids.join(","));
+  }
+
+  function applyFilters() {
+    rows.forEach(function (row) {
+      if (matchFilters(row)) row.classList.remove("hidden");
+      else row.classList.add("hidden");
+    });
+    // After filter changes, ensure all currently visible rows are selected for export by default.
+    setCheckedForVisible(true);
+    syncHeaderCheckState();
+    refreshExportHref();
+  }
+
+  fillStatusOptions();
+  applyFilters();
+
+  if (checkAll) {
+    checkAll.addEventListener("change", function () {
+      setCheckedForVisible(checkAll.checked);
+      syncHeaderCheckState();
+      refreshExportHref();
+    });
+  }
+
+  rows.forEach(function (row) {
+    var cb = row.querySelector(".overview-row-check");
+    if (!cb) return;
+    cb.addEventListener("change", function () {
+      syncHeaderCheckState();
+      refreshExportHref();
+    });
+  });
+
+  if (statusFilter) statusFilter.addEventListener("change", applyFilters);
+  if (dateFromFilter) dateFromFilter.addEventListener("change", applyFilters);
+  if (dateToFilter) dateToFilter.addEventListener("change", applyFilters);
+  if (exportLink) {
+    exportLink.addEventListener("click", function (e) {
+      var ids = selectedVisibleIds();
+      if (!ids.length) {
+        e.preventDefault();
+        window.alert("Select at least one visible row to export.");
+      }
+    });
+  }
+})();
+</script>
 {% endblock %}

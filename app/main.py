@@ -1268,16 +1268,34 @@ def download_pdf(
 
 
 @app.get("/export/applications.xlsx")
-def export_all_xlsx(db: Session = Depends(get_db), _user: User = Depends(require_export_read)):
-    rows = (
-        db.scalars(
-            select(LCApplication)
-            .options(joinedload(LCApplication.applicant))
-            .order_by(LCApplication.id.asc())
-        )
-        .unique()
-        .all()
+def export_all_xlsx(
+    ids: str | None = Query(
+        None,
+        description="Optional comma-separated LC application ids to export.",
+    ),
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_export_read),
+):
+    stmt = (
+        select(LCApplication)
+        .options(joinedload(LCApplication.applicant))
+        .order_by(LCApplication.id.asc())
     )
+    if ids:
+        parsed_ids: list[int] = []
+        for raw in ids.split(","):
+            token = raw.strip()
+            if not token:
+                continue
+            try:
+                parsed_ids.append(int(token))
+            except ValueError:
+                continue
+        if parsed_ids:
+            stmt = stmt.where(LCApplication.id.in_(parsed_ids))
+        else:
+            stmt = stmt.where(False)
+    rows = db.scalars(stmt).unique().all()
     out = EXPORTS_DIR / "lc_applications_export.xlsx"
     export_lc_workbook(rows, out)
     return FileResponse(

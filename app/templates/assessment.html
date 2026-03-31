@@ -176,14 +176,17 @@
                     <span class="material-symbols-outlined surcharge-toggle-icon text-xl leading-none">add</span>
                   </button>
                   <div class="min-w-0 flex-1">
-                    <div class="font-bold text-on-surface">Surcharge</div>
-                    <div id="surcharge-breakdown-slot" class="mt-1">
+                    <div id="surcharge-section-title" class="font-bold text-on-surface {% if display.surcharge_itemized and display.surcharge_lines %}hidden{% endif %}">Surcharge</div>
+                    <div id="surcharge-breakdown-slot" class="{% if display.surcharge_itemized and display.surcharge_lines %}mt-0{% else %}mt-1{% endif %}">
                       {% if display.surcharge_lines %}
                         {% if display.surcharge_itemized %}
-                        <div class="mt-2 space-y-1.5">
+                        <div class="mt-2 space-y-3">
                           {% for line in display.surcharge_lines %}
-                          <div class="flex items-baseline justify-between gap-4 text-xs text-on-surface-variant sm:pl-1">
-                            <span>{{ line.name }}</span>
+                          <div class="flex flex-wrap items-start justify-between gap-3 border-b border-outline-variant/10 pb-3 last:border-b-0 last:pb-0">
+                            <div>
+                              <div class="font-bold text-on-surface">Surcharge</div>
+                              <div class="text-xs text-on-surface-variant">{{ line.name }}</div>
+                            </div>
                             <span class="shrink-0 font-mono font-bold text-on-surface">₱{{ "%.2f"|format(line.price) }}</span>
                           </div>
                           {% endfor %}
@@ -859,6 +862,12 @@
       slot.innerHTML =
         '<div class="text-xs text-on-surface-variant">No line items — template default</div>';
       amtCell.textContent = "₱0.00";
+      var st0 = document.getElementById("surcharge-section-title");
+      if (st0) {
+        st0.classList.remove("hidden");
+      }
+      slot.classList.remove("mt-0");
+      slot.classList.add("mt-1");
       return;
     }
     var total = 0;
@@ -873,22 +882,35 @@
         var nm = escapeHtml(line.name || "—");
         var pr = Number(line.price).toFixed(2);
         parts.push(
-          '<div class="flex items-baseline justify-between gap-4 text-xs text-on-surface-variant sm:pl-1">' +
-            "<span>" +
+          '<div class="flex flex-wrap items-start justify-between gap-3 border-b border-outline-variant/10 pb-3 last:border-b-0 last:pb-0">' +
+            '<div><div class="font-bold text-on-surface">Surcharge</div>' +
+            '<div class="text-xs text-on-surface-variant">' +
             nm +
-            "</span>" +
+            "</div></div>" +
             '<span class="shrink-0 font-mono font-bold text-on-surface">₱' +
             pr +
             "</span></div>"
         );
       }
-      subHtml = '<div class="mt-2 space-y-1.5">' + parts.join("") + "</div>";
+      subHtml = '<div class="mt-2 space-y-3">' + parts.join("") + "</div>";
     } else {
-      subHtml = '<div class="mt-1 text-xs text-on-surface-variant">Per template rules</div>';
+      subHtml = '<div class="text-xs text-on-surface-variant">Per template rules</div>';
     }
 
     slot.innerHTML = subHtml;
     amtCell.textContent = "₱" + total.toFixed(2);
+    var secTitle = document.getElementById("surcharge-section-title");
+    if (secTitle) {
+      if (d.surcharge_itemized && lines.length) {
+        secTitle.classList.add("hidden");
+        slot.classList.remove("mt-1");
+        slot.classList.add("mt-0");
+      } else {
+        secTitle.classList.remove("hidden");
+        slot.classList.remove("mt-0");
+        slot.classList.add("mt-1");
+      }
+    }
   }
 
   function surchargeRowHtml() {
