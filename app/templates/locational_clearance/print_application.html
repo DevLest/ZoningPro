@@ -3,11 +3,14 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Application Form — {{ c.application_number or c.id }}</title>
+  <title>Application for Locational Clearance — {{ c.application_number or c.id }}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @media print { .no-print { display: none !important; } body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
     .cell { border: 1px solid #0f172a; }
+    .fill-data { color: #b91c1c; }
+    @media print { .fill-data { color: #b91c1c !important; } }
+    .chk { font-weight: 700; min-width: 1.25rem; display: inline-block; text-align: center; }
   </style>
 </head>
 <body class="bg-slate-100 text-slate-900 print:bg-white">
@@ -17,120 +20,250 @@
     <a href="/locational-clearance/{{ c.id }}" class="ml-3 text-sm text-emerald-800 hover:underline">Back to case</a>
   </div>
   {% endif %}
-  <div class="mx-auto max-w-4xl px-4 pb-10 font-sans text-[11px] leading-snug print:max-w-none">
-    <article class="border-2 border-slate-900 bg-white p-4 print:border-black">
-      <header class="mb-3 flex gap-3 border-b pb-3">
-        <img src="/static/{{ print_branding.logo_static_relpath }}" alt="" width="64" height="64" class="h-16 w-16 shrink-0 object-contain"/>
-        <div class="flex-1 text-center">
-          <p class="text-[10px]">{{ print_branding.republic_label }}</p>
-          <p class="text-[11px] font-semibold">{{ print_branding.municipality_label }}</p>
-          <p class="text-[10px] font-bold uppercase">{{ print_branding.office_label }}</p>
-        </div>
-      </header>
-      <p class="mb-4 text-center text-[10px] font-bold">Application</p>
-      <div class="mb-3 grid grid-cols-2 gap-2">
-        <div class="cell px-2 py-1"><span class="font-semibold">Application No.</span> {{ c.application_number or "—" }}</div>
-        <div class="cell px-2 py-1 text-right">{{ print_branding.republic_label }}</div>
-        <div class="cell px-2 py-1"><span class="font-semibold">Date of Receipt</span> {% if c.date_of_receipt %}{{ c.date_of_receipt.strftime("%m/%d/%Y") }}{% else %}—{% endif %}</div>
-        <div class="cell px-2 py-1 text-right">{{ print_branding.municipality_label }}</div>
-        <div class="cell px-2 py-1"><span class="font-semibold">O.R. No.</span> {{ c.or_number or "—" }}</div>
-        <div class="cell px-2 py-1 text-right text-[10px] font-bold">{{ print_branding.office_label }}</div>
-        <div class="cell px-2 py-1"><span class="font-semibold">Date of Issue</span> {% if c.or_date %}{{ c.or_date.strftime("%m/%d/%Y") }}{% else %}—{% endif %}</div>
-        <div class="cell px-2 py-1"></div>
-        <div class="cell px-2 py-1 col-span-2"><span class="font-semibold">Amount Paid</span> Php {% if c.amount_paid is not none %}{{ "{:,.2f}".format(c.amount_paid) }}{% else %}—{% endif %}</div>
-      </div>
-      <p class="mb-2 text-center text-[12px] font-bold">APPLICATION FOR LOCATIONAL CLEARANCE</p>
-      <table class="w-full border-collapse border-2 border-slate-900 text-[10px]">
+  {# existing_land_use keyword hints for §13 grid #}
+  {% set elu = (c.existing_land_use or '') | lower %}
+  <div class="mx-auto max-w-4xl px-4 pb-10 font-sans text-[10px] leading-snug print:max-w-none">
+    <article class="border-2 border-slate-900 bg-white p-3 print:border-black">
+
+      {# Header: left = receipt block, right = logo + letterhead #}
+      <table class="mb-0 w-full border-collapse border-2 border-slate-900">
         <tr>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">1. NAME OF APPLICANT (Last, First, Middle)</td>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">2. NAME OF CORPORATION</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.applicant_line }}</td>
-          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.corporation_line }}</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">3. ADDRESS OF APPLICANT</td>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">4. ADDRESS OF CORPORATION</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.applicant_address }}</td>
-          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.corporation_address or "—" }}</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">5. AUTHORIZED REPRESENTATIVE</td>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">6. ADDRESS OF AUTHORIZED REPRESENTATIVE</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.authorized_representative_name or "—" }}</td>
-          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.authorized_representative_address or "—" }}</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">7. PROJECT TYPE</td>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">PROJECT NATURE</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.project_title }}</td>
-          <td class="cell px-2 py-2 align-top" colspan="2">
-            {% if c.project_nature == 'new_development' %}☑ New Development{% else %}☐ New Development{% endif %}
-            {% if c.project_nature == 'improvement' %}☑ Improvement{% else %}☐ Improvement{% endif %}
-            {% if c.project_nature == 'others' %}☑ Others: {{ c.project_nature_other or "" }}{% endif %}
+          <td class="cell align-top p-0" style="width: 42%;">
+            <table class="w-full border-collapse text-[10px]">
+              <tr>
+                <td class="cell border-slate-900 bg-slate-50 px-2 py-1 font-semibold">Application No.</td>
+                <td class="cell fill-data px-2 py-1 font-semibold">{{ c.application_number or "—" }}</td>
+              </tr>
+              <tr>
+                <td class="cell border-slate-900 bg-slate-50 px-2 py-1 font-semibold">Date of Receipt</td>
+                <td class="cell fill-data px-2 py-1 font-semibold">{% if c.date_of_receipt %}{{ c.date_of_receipt.strftime("%m/%d/%Y") }}{% else %}—{% endif %}</td>
+              </tr>
+              <tr>
+                <td class="cell border-slate-900 bg-slate-50 px-2 py-1 font-semibold">O.R. No.</td>
+                <td class="cell fill-data px-2 py-1 font-semibold">{{ c.or_number or "—" }}</td>
+              </tr>
+              <tr>
+                <td class="cell border-slate-900 bg-slate-50 px-2 py-1 font-semibold">Date of Issue</td>
+                <td class="cell fill-data px-2 py-1 font-semibold">{% if c.or_date %}{{ c.or_date.strftime("%m/%d/%Y") }}{% else %}—{% endif %}</td>
+              </tr>
+              <tr>
+                <td class="cell border-slate-900 bg-slate-50 px-2 py-1 font-semibold">Amount Paid</td>
+                <td class="cell fill-data px-2 py-1 font-semibold">{% if c.amount_paid is not none %}Php {{ "{:,.2f}".format(c.amount_paid) }}{% else %}—{% endif %}</td>
+              </tr>
+            </table>
           </td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">9. PROJECT LOCATION</td>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">10. PROJECT AREA (sq.m.)</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-2 align-top" colspan="2">{{ c.project_location or "—" }}</td>
-          <td class="cell px-2 py-2 align-top" colspan="2">Lot: {% if c.lot_area_sqm is not none %}{{ "{:,.2f}".format(c.lot_area_sqm) }}{% else %}—{% endif %} &nbsp; Bldg.: {% if c.building_area_sqm is not none %}{{ "{:,.2f}".format(c.building_area_sqm) }}{% else %}—{% endif %}</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">11. RIGHT OVER LAND</td>
-          <td class="cell px-2 py-1 font-semibold" colspan="2">12. PERMANENT / TEMPORARY</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-2 align-top" colspan="2">
-            {% if c.right_over_land == 'owner' %}☑ Owner{% else %}☐ Owner{% endif %}
-            {% if c.right_over_land == 'lessee' %}☑ Lessee{% else %}☐ Lessee{% endif %}
-            {% if c.right_over_land == 'other' %}☑ Other: {{ c.right_over_land_other or "" }}{% endif %}
-          </td>
-          <td class="cell px-2 py-2 align-top" colspan="2">
-            {% if c.land_use_duration == 'permanent' %}☑ Permanent{% else %}☐ Permanent{% endif %}
-            {% if c.land_use_duration == 'temporary' %}☑ Temporary{% else %}☐ Temporary{% endif %}
-          </td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-1 font-semibold" colspan="4">13. EXISTING LAND USES OF PROJECT SITE</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-2 align-top" colspan="4">{{ c.existing_land_use or "—" }}</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-1 font-semibold" colspan="4">14. PROJECT COST / CAPITALIZATION</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-2 align-top" colspan="4">{{ c.project_cost_words or "—" }} {% if c.project_cost_amount is not none %}({{ "{:,.2f}".format(c.project_cost_amount) }}){% endif %}</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-1 font-semibold" colspan="4">15. LC notice (Yes / No)</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-2 align-top" colspan="4">
-            {% if c.lc_notice_required == true %}Yes{% elif c.lc_notice_required == false %}No{% else %}—{% endif %}
-            &nbsp; Date(s) filed: {{ c.lc_notice_dates_filed or "—" }} &nbsp; Action: {{ c.lc_notice_actions or "—" }}
-          </td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-1 font-semibold" colspan="4">16. PREFERRED MODE OF RELEASE</td>
-        </tr>
-        <tr>
-          <td class="cell px-2 py-2 align-top" colspan="4">
-            {% if c.release_mode == 'pickup' %}☑ Pick-up{% else %}☐ Pick-up{% endif %}
-            {% if c.release_mode == 'mail' %}☑ By mail ({{ c.release_mail_to or "" }}){% else %}☐ By mail{% endif %}
+          <td class="cell align-middle p-2">
+            <div class="flex items-center justify-center gap-3">
+              <img src="/static/{{ print_branding.logo_static_relpath }}" alt="" width="72" height="72" class="h-[72px] w-[72px] shrink-0 object-contain"/>
+              <div class="text-center leading-tight">
+                <p>{{ print_branding.republic_label }}</p>
+                <p>Province of Negros Occidental</p>
+                <p class="font-semibold">{{ print_branding.municipality_label }}</p>
+                <p class="mt-1 text-[11px] font-bold uppercase tracking-wide">{{ print_branding.office_label }}</p>
+              </div>
+            </div>
           </td>
         </tr>
       </table>
+
+      <div class="cell border-t-0 border-slate-900 bg-slate-100 px-2 py-2 text-center text-[12px] font-bold tracking-wide">
+        APPLICATION FOR LOCATIONAL CLEARANCE
+      </div>
+
+      {# 1–2 Applicant / Corporation names #}
+      <table class="w-full border-collapse border-2 border-t-0 border-slate-900 text-[10px]">
+        <tr>
+          <td class="cell w-1/2 px-2 py-1 font-semibold">1. NAME OF APPLICANT (Last, First, Middle)</td>
+          <td class="cell w-1/2 px-2 py-1 font-semibold">2. NAME OF CORPORATION</td>
+        </tr>
+        <tr>
+          <td class="cell fill-data px-2 py-2 align-top font-semibold">{{ c.applicant_line }}</td>
+          <td class="cell fill-data px-2 py-2 align-top font-semibold">{{ c.corporation_line }}</td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-1 font-semibold">3. ADDRESS OF APPLICANT</td>
+          <td class="cell px-2 py-1 font-semibold">4. ADDRESS OF CORPORATION</td>
+        </tr>
+        <tr>
+          <td class="cell fill-data px-2 py-2 align-top font-semibold">{{ c.applicant_address }}</td>
+          <td class="cell fill-data px-2 py-2 align-top font-semibold">{{ c.corporation_address or "—" }}</td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-1 font-semibold">5. NAME OF AUTHORIZED REPRESENTATIVE</td>
+          <td class="cell px-2 py-1 font-semibold">6. ADDRESS OF AUTHORIZED REPRESENTATIVE</td>
+        </tr>
+        <tr>
+          <td class="cell fill-data px-2 py-2 align-top font-semibold">{{ c.authorized_representative_name or "" }}</td>
+          <td class="cell fill-data px-2 py-2 align-top font-semibold">{{ c.authorized_representative_address or "" }}</td>
+        </tr>
+      </table>
+
+      {# 7 Project type (full width) #}
+      <table class="w-full border-collapse border-2 border-t-0 border-slate-900 text-[10px]">
+        <tr>
+          <td class="cell px-2 py-1 font-semibold">7. PROJECT TYPE</td>
+        </tr>
+        <tr>
+          <td class="cell fill-data px-2 py-2 font-semibold">{{ c.project_title }}</td>
+        </tr>
+      </table>
+
+      {# 8 Project nature #}
+      <table class="w-full border-collapse border-2 border-t-0 border-slate-900 text-[10px]">
+        <tr>
+          <td class="cell px-2 py-1 font-semibold">8. PROJECT NATURE</td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-2">
+            <span class="chk fill-data">{% if c.project_nature == 'new_development' %}x{% endif %}</span> New Development &nbsp;&nbsp;
+            <span class="chk fill-data">{% if c.project_nature == 'improvement' %}x{% endif %}</span> Improvement &nbsp;&nbsp;
+            <span class="chk fill-data">{% if c.project_nature == 'others' %}x{% endif %}</span> Others (Specify) <span class="fill-data font-semibold">{{ c.project_nature_other or "" }}</span>
+          </td>
+        </tr>
+      </table>
+
+      {# 9–10 Location & areas #}
+      <table class="w-full border-collapse border-2 border-t-0 border-slate-900 text-[10px]">
+        <tr>
+          <td class="cell align-top px-2 py-1 font-semibold" rowspan="3" style="width: 52%; vertical-align: top;">
+            <span class="block">9. PROJECT LOCATION</span>
+            <span class="fill-data mt-1 block font-semibold leading-snug">{{ c.project_location or "—" }}</span>
+          </td>
+          <td class="cell px-2 py-1 font-semibold text-center" colspan="2">10. PROJECT AREA (Square meter)</td>
+        </tr>
+        <tr>
+          <td class="cell whitespace-nowrap px-2 py-1 text-right font-semibold">Lot:</td>
+          <td class="cell fill-data px-2 py-1 font-semibold">{% if c.lot_area_sqm is not none %}{{ "{:,.2f}".format(c.lot_area_sqm) }}{% else %}—{% endif %}</td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-1 text-right font-semibold align-top">BUILDING / Improvement:</td>
+          <td class="cell fill-data px-2 py-2 align-top font-semibold">{% if c.building_area_sqm is not none %}{{ "{:,.2f}".format(c.building_area_sqm) }}{% else %}—{% endif %}</td>
+        </tr>
+      </table>
+
+      {# 11–12 Right over land & duration #}
+      <table class="w-full border-collapse border-2 border-t-0 border-slate-900 text-[10px]">
+        <tr>
+          <td class="cell w-1/2 px-2 py-1 font-semibold">11. RIGHT OVER LAND</td>
+          <td class="cell w-1/2 px-2 py-1 font-semibold">12. LAND USE DURATION</td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-2 align-top">
+            <span class="chk fill-data">{% if c.right_over_land == 'owner' %}x{% endif %}</span> Owner &nbsp;&nbsp;
+            <span class="chk fill-data">{% if c.right_over_land == 'lessee' %}x{% endif %}</span> Lessee &nbsp;&nbsp;
+            <span class="chk fill-data">{% if c.right_over_land == 'other' %}x{% endif %}</span> Others (specify) <span class="fill-data font-semibold">{{ c.right_over_land_other or "" }}</span>
+          </td>
+          <td class="cell px-2 py-2 align-top">
+            <span class="chk fill-data">{% if c.land_use_duration == 'permanent' %}x{% endif %}</span> Permanent &nbsp;&nbsp;
+            <span class="chk fill-data">{% if c.land_use_duration == 'temporary' %}x{% endif %}</span> Temporary
+          </td>
+        </tr>
+      </table>
+
+      {# 13 Existing land uses — grid + free text #}
+      <table class="w-full border-collapse border-2 border-t-0 border-slate-900 text-[9px]">
+        <tr>
+          <td class="cell px-2 py-1 font-semibold text-[10px]" colspan="6">13. EXISTING LAND USES OF PROJECT SITE</td>
+        </tr>
+        <tr>
+          <td class="cell px-1 py-1"><span class="chk fill-data">{% if 'residential' in elu %}x{% endif %}</span> Residential</td>
+          <td class="cell px-1 py-1"><span class="chk fill-data">{% if 'institutional' in elu %}x{% endif %}</span> Institutional</td>
+          <td class="cell px-1 py-1"><span class="chk fill-data">{% if 'commercial' in elu %}x{% endif %}</span> Commercial</td>
+          <td class="cell px-1 py-1"><span class="chk fill-data">{% if 'industrial' in elu or 'agro' in elu %}x{% endif %}</span> Industrial</td>
+          <td class="cell px-1 py-1"><span class="chk fill-data">{% if 'vacant' in elu or 'idle' in elu %}x{% endif %}</span> Vacant/Idle</td>
+          <td class="cell px-1 py-1"><span class="chk fill-data">{% if 'agricultural' in elu or 'crop' in elu %}x{% endif %}</span> Agricultural</td>
+        </tr>
+        <tr>
+          <td class="cell px-1 py-1" colspan="2"><span class="chk fill-data">{% if 'tenanted' in elu %}x{% endif %}</span> Tenanted</td>
+          <td class="cell px-1 py-1" colspan="2"><span class="chk fill-data">{% if 'not tenanted' in elu or 'nontenanted' in elu %}x{% endif %}</span> Not Tenanted</td>
+          <td class="cell px-1 py-1" colspan="2">Others: <span class="fill-data font-semibold">{{ c.existing_land_use or "—" }}</span></td>
+        </tr>
+      </table>
+
+      {# 14 Cost #}
+      <table class="w-full border-collapse border-2 border-t-0 border-slate-900 text-[10px]">
+        <tr>
+          <td class="cell px-2 py-1 font-semibold">14. PROJECT COST/CAPITALIZATION (in Pesos, in words and figures)</td>
+        </tr>
+        <tr>
+          <td class="cell fill-data px-2 py-2 font-semibold">
+            {{ c.project_cost_words or "—" }}{% if c.project_cost_amount is not none %} ({{ "{:,.2f}".format(c.project_cost_amount) }}){% endif %}
+          </td>
+        </tr>
+      </table>
+
+      {# 15 LC notice #}
+      <table class="w-full border-collapse border-2 border-t-0 border-slate-900 text-[10px]">
+        <tr>
+          <td class="cell px-2 py-2 font-semibold leading-snug" colspan="2">
+            15. Is the project applied for subject to written Notice from the Zoning Administrator to the effect requiring for the presentation of Locational Clearance (LC) or to apply for LC?
+          </td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-2" colspan="2">
+            <span class="chk fill-data">{% if c.lc_notice_required == true %}x{% endif %}</span> Yes &nbsp;&nbsp;
+            <span class="chk fill-data">{% if c.lc_notice_required == false %}x{% endif %}</span> No
+          </td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-1 font-semibold" style="width: 50%;">15.a) Date(s) filed</td>
+          <td class="cell px-2 py-1 font-semibold">15.b) Action(s) Taken</td>
+        </tr>
+        <tr>
+          <td class="cell fill-data px-2 py-2 align-top font-semibold">{{ c.lc_notice_dates_filed or "" }}</td>
+          <td class="cell fill-data px-2 py-2 align-top font-semibold">{{ c.lc_notice_actions or "" }}</td>
+        </tr>
+      </table>
+
+      {# 16 Release #}
+      <table class="w-full border-collapse border-2 border-t-0 border-slate-900 text-[10px]">
+        <tr>
+          <td class="cell px-2 py-1 font-semibold">16. PREFERRED MODE OF RELEASE OF DECISION</td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-2">
+            <span class="chk fill-data">{% if c.release_mode == 'pickup' %}x{% endif %}</span> Pick-up &nbsp;&nbsp;&nbsp;
+            <span class="chk fill-data">{% if c.release_mode == 'mail' %}x{% endif %}</span> By Mail Addressed to:
+            <span class="chk fill-data">{% if c.release_mode == 'mail' and c.release_mail_to == 'applicant' %}x{% endif %}</span> Applicant
+            <span class="chk fill-data">{% if c.release_mode == 'mail' and c.release_mail_to == 'authorized_rep' %}x{% endif %}</span> Authorized Representative
+          </td>
+        </tr>
+      </table>
+
+      {# 17–18 Signatures #}
+      <table class="w-full border-collapse border-2 border-t-0 border-slate-900 text-[10px]">
+        <tr>
+          <td class="cell w-1/2 px-2 py-1 font-semibold align-top">17. SIGNATURE OF APPLICANT</td>
+          <td class="cell w-1/2 px-2 py-1 font-semibold align-top">18. SIGNATURE OF AUTHORIZED REPRESENTATIVE</td>
+        </tr>
+        <tr>
+          <td class="cell px-2 py-10 align-bottom"><div class="border-b border-slate-800"></div></td>
+          <td class="cell px-2 py-10 align-bottom"><div class="border-b border-slate-800"></div></td>
+        </tr>
+      </table>
+
+      {# Notary #}
+      <div class="cell border-2 border-t-0 border-slate-900 px-3 py-3 text-[9px] leading-relaxed">
+        <p class="mb-2">Republic of the Philippines )</p>
+        <p class="mb-2"><span class="inline-block min-w-[12rem] border-b border-slate-600"></span> ) s.s.</p>
+        <p class="mb-2 text-justify">
+          SUBSCRIBED AND SWORN to before me this <span class="inline-block min-w-[2rem] border-b border-slate-400"></span> day of <span class="inline-block min-w-[6rem] border-b border-slate-400"></span>, <span class="inline-block min-w-[3rem] border-b border-slate-400"></span>,
+          in the City/Municipality of <span class="inline-block min-w-[8rem] border-b border-slate-400"></span>, affiant exhibited to me his/her
+          <span class="inline-block min-w-[10rem] border-b border-slate-400"></span>, Province of <span class="inline-block min-w-[8rem] border-b border-slate-400"></span>.
+        </p>
+        <p class="mb-2">
+          Community Tax Certificate No. <span class="inline-block min-w-[6rem] border-b border-slate-400"></span> issued on <span class="inline-block min-w-[8rem] border-b border-slate-400"></span>.
+        </p>
+        <div class="mt-4 flex justify-end">
+          <p class="text-[10px] font-bold">NOTARY PUBLIC</p>
+        </div>
+        <div class="mt-6 grid grid-cols-2 gap-x-8 gap-y-1 border-t border-slate-400 pt-2 text-[8px]">
+          <span>Doc. No. _______________</span>
+          <span>Page No. _______________</span>
+          <span>Book No. _______________</span>
+          <span>Series of _______________</span>
+        </div>
+      </div>
     </article>
   </div>
 </body>
