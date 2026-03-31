@@ -1,4 +1,4 @@
-{# Project sidebar — expects: sidebar_active, project_title, project_subtitle, app_id, show_finalize_cta #}
+{# Project sidebar — expects: sidebar_active, project_title, project_subtitle, app_id #}
 {% set classify_href = "/applications/" ~ app_id ~ "/classify" if app_id else "#" %}
 {% set assessment_href = "/applications/" ~ app_id ~ "/assessment" if app_id else "#" %}
 <aside
@@ -71,18 +71,6 @@
       Zoning laws
     </span>
   </nav>
-  {% if show_finalize_cta and app_id and permissions.applications.write %}
-  <div class="mb-4 px-4">
-    <form method="post" action="/applications/{{ app_id }}/finalize">
-      <button
-        type="submit"
-        class="w-full rounded-xl bg-primary py-3 text-sm font-bold text-on-primary shadow-md transition-all hover:opacity-90"
-      >
-        Finalize estimate
-      </button>
-    </form>
-  </div>
-  {% endif %}
   <div class="flex flex-col gap-1 border-t border-slate-200 pt-4 dark:border-slate-800">
     <p class="mb-1 px-4 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Administration</p>
     {% if permissions.users.read %}

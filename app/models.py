@@ -81,6 +81,8 @@ class LCApplication(Base):
     project_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
     lot_area_sqm: Mapped[float | None] = mapped_column(Float, nullable=True)
     optional_units: Mapped[float | None] = mapped_column(Float, nullable=True)
+    #: JSON array of {"name": str, "price": float} — itemized surcharge lines.
+    surcharge_items: Mapped[str | None] = mapped_column(Text, nullable=True)
     surcharge_override: Mapped[float | None] = mapped_column(Float, nullable=True)
     lc_fee_override: Mapped[float | None] = mapped_column(Float, nullable=True)
     waive_zoning_cert: Mapped[bool] = mapped_column(Boolean, default=False)

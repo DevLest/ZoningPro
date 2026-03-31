@@ -42,6 +42,8 @@ def _migrate_sqlite_schema() -> None:
             conn.execute(text("ALTER TABLE lc_applications ADD COLUMN address_lat REAL"))
         if "address_lon" not in cols:
             conn.execute(text("ALTER TABLE lc_applications ADD COLUMN address_lon REAL"))
+        if "surcharge_items" not in cols:
+            conn.execute(text("ALTER TABLE lc_applications ADD COLUMN surcharge_items TEXT"))
 
 
 def _migrate_users_roles() -> None:

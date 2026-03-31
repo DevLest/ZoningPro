@@ -3,6 +3,8 @@
 {% block content %}
 {% set c = case_row %}
 {% set p = prefill or {} %}
+{% set lock = lc_fee_app_fields_locked | default(false) %}
+{% set ro = "cursor-not-allowed bg-surface-container-highest/80 text-on-surface-variant" %}
 <nav class="mb-4 flex flex-wrap items-center gap-2 text-sm text-on-surface-variant">
   <a href="/" class="hover:text-primary">Overview</a>
   <span class="material-symbols-outlined text-xs">chevron_right</span>
@@ -25,6 +27,13 @@
   {% endif %}
 </div>
 
+{% if lock %}
+<div class="mb-6 rounded-xl border border-outline-variant/20 bg-surface-container-high/60 px-4 py-3 text-sm text-on-surface-variant">
+  <span class="material-symbols-outlined align-middle text-base text-primary">lock</span>
+  This case is tied to a <strong class="text-on-surface">paid</strong> fee application. Application no., receipt and paid dates, amount paid, applicant identity, address, and core project fields from that record cannot be changed here. You may still enter or correct the <strong class="text-on-surface">O.R. no.</strong> if needed.
+</div>
+{% endif %}
+
 <form method="post" action="{% if is_edit %}/locational-clearance/{{ c.id }}{% else %}/locational-clearance/new{% endif %}" class="space-y-10 rounded-xl border border-outline-variant/10 bg-surface-container-lowest p-6 shadow-sm lg:p-10">
   <input type="hidden" name="existing_applicant_id" id="existing-applicant-id" value="{{ prefill_existing_applicant_id }}" />
   <input type="hidden" name="lc_application_id" value="{% if c and c.lc_application_id %}{{ c.lc_application_id }}{% elif prefill_lc_application_id %}{{ prefill_lc_application_id }}{% endif %}" />
@@ -34,11 +43,11 @@
     <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
       <div class="space-y-2">
         <label class="block text-sm font-semibold text-on-surface-variant">Application no.</label>
-        <input name="application_number" value="{{ c.application_number if c else (p.application_number or '') }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" placeholder="e.g. 2025-045-I" />
+        <input name="application_number" value="{{ c.application_number if c else (p.application_number or '') }}" {% if lock %}readonly{% endif %} class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary {% if lock %}{{ ro }}{% endif %}" placeholder="e.g. 2025-045-I" />
       </div>
       <div class="space-y-2">
         <label class="block text-sm font-semibold text-on-surface-variant">Date of receipt</label>
-        <input type="date" name="date_of_receipt" value="{% if c and c.date_of_receipt %}{{ c.date_of_receipt.isoformat() }}{% elif p.date_of_receipt %}{{ p.date_of_receipt }}{% endif %}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+        <input type="date" name="date_of_receipt" value="{% if c and c.date_of_receipt %}{{ c.date_of_receipt.isoformat() }}{% elif p.date_of_receipt %}{{ p.date_of_receipt }}{% endif %}" {% if lock %}readonly{% endif %} class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary {% if lock %}{{ ro }}{% endif %}" />
       </div>
       <div class="space-y-2">
         <label class="block text-sm font-semibold text-on-surface-variant">O.R. no.</label>
@@ -46,39 +55,43 @@
       </div>
       <div class="space-y-2">
         <label class="block text-sm font-semibold text-on-surface-variant">O.R. / issue date</label>
-        <input type="date" name="or_date" value="{% if c and c.or_date %}{{ c.or_date.isoformat() }}{% elif p.or_date %}{{ p.or_date }}{% endif %}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+        <input type="date" name="or_date" value="{% if c and c.or_date %}{{ c.or_date.isoformat() }}{% elif p.or_date %}{{ p.or_date }}{% endif %}" {% if lock %}readonly{% endif %} class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary {% if lock %}{{ ro }}{% endif %}" />
       </div>
       <div class="space-y-2">
         <label class="block text-sm font-semibold text-on-surface-variant">Amount paid (Php)</label>
-        <input name="amount_paid" value="{% if c and c.amount_paid is not none %}{{ c.amount_paid }}{% endif %}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" placeholder="0" />
+        <input name="amount_paid" value="{% if c and c.amount_paid is not none %}{{ c.amount_paid }}{% elif not c and p.get('amount_paid') is not none %}{{ p.get('amount_paid') }}{% endif %}" {% if lock %}readonly{% endif %} class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary {% if lock %}{{ ro }}{% endif %}" placeholder="0" />
       </div>
     </div>
   </section>
 
   <section class="space-y-6">
     <h2 class="flex items-center gap-2 text-lg font-bold text-primary"><span class="material-symbols-outlined">person</span> Applicant</h2>
+    {% if not lock %}
     <p class="text-xs text-on-surface-variant">Search works like the LC intake form. Prefill from an LC fee application: <code class="rounded bg-surface-container-high px-1">/locational-clearance/new?lc_application=ID</code></p>
     <div class="relative space-y-1">
       <label class="block text-sm font-semibold text-on-surface-variant" for="applicant-search-input">Find existing applicant</label>
       <input type="search" id="applicant-search-input" autocomplete="off" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 font-medium text-on-surface outline-none focus:ring-2 focus:ring-primary" placeholder="Type at least 2 letters…" />
       <ul id="applicant-suggest-list" class="absolute z-30 mt-1 hidden max-h-64 w-full overflow-auto rounded-lg border border-outline-variant/20 bg-white py-1 shadow-lg" role="listbox" hidden></ul>
     </div>
+    {% else %}
+    <p class="text-xs text-on-surface-variant">Applicant name and address come from the linked fee application and cannot be changed on this form.</p>
+    {% endif %}
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <div class="space-y-2">
         <label class="block text-sm font-semibold text-on-surface-variant">First name *</label>
-        <input name="applicant_first_name" id="applicant-first-name" required value="{{ reuse_applicant.first_name if reuse_applicant else '' }}" class="applicant-name-field w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+        <input name="applicant_first_name" id="applicant-first-name" required value="{{ reuse_applicant.first_name if reuse_applicant else '' }}" {% if lock %}readonly{% endif %} class="applicant-name-field w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary {% if lock %}{{ ro }}{% endif %}" />
       </div>
       <div class="space-y-2">
         <label class="block text-sm font-semibold text-on-surface-variant">Last name *</label>
-        <input name="applicant_last_name" id="applicant-last-name" required value="{{ reuse_applicant.last_name if reuse_applicant else '' }}" class="applicant-name-field w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+        <input name="applicant_last_name" id="applicant-last-name" required value="{{ reuse_applicant.last_name if reuse_applicant else '' }}" {% if lock %}readonly{% endif %} class="applicant-name-field w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary {% if lock %}{{ ro }}{% endif %}" />
       </div>
       <div class="space-y-2">
         <label class="block text-sm font-semibold text-on-surface-variant">Middle name</label>
-        <input name="applicant_middle_name" id="applicant-middle-name" value="{{ reuse_applicant.middle_name or '' if reuse_applicant else '' }}" class="applicant-name-field w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+        <input name="applicant_middle_name" id="applicant-middle-name" value="{{ reuse_applicant.middle_name or '' if reuse_applicant else '' }}" {% if lock %}readonly{% endif %} class="applicant-name-field w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary {% if lock %}{{ ro }}{% endif %}" />
       </div>
       <div class="space-y-2">
         <label class="block text-sm font-semibold text-on-surface-variant">Suffix</label>
-        <input name="applicant_suffix" id="applicant-suffix" value="{{ reuse_applicant.suffix or '' if reuse_applicant else '' }}" class="applicant-name-field w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+        <input name="applicant_suffix" id="applicant-suffix" value="{{ reuse_applicant.suffix or '' if reuse_applicant else '' }}" {% if lock %}readonly{% endif %} class="applicant-name-field w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary {% if lock %}{{ ro }}{% endif %}" />
       </div>
     </div>
     <div class="space-y-2">
@@ -88,11 +101,11 @@
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
       <div class="space-y-2">
         <label class="block text-sm font-semibold text-on-surface-variant">Address of applicant *</label>
-        <textarea name="applicant_address" required rows="2" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">{% if c %}{{ c.applicant_address }}{% elif p.applicant_address %}{{ p.applicant_address }}{% endif %}</textarea>
+        <textarea name="applicant_address" required rows="2" {% if lock %}readonly{% endif %} class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary {% if lock %}{{ ro }}{% endif %}">{% if c %}{{ c.applicant_address }}{% elif p.applicant_address %}{{ p.applicant_address }}{% endif %}</textarea>
       </div>
       <div class="space-y-2">
         <label class="block text-sm font-semibold text-on-surface-variant">Address of corporation</label>
-        <textarea name="corporation_address" rows="2" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">{% if c %}{{ c.corporation_address or '' }}{% elif p.corporation_address %}{{ p.corporation_address }}{% endif %}</textarea>
+        <textarea name="corporation_address" rows="2" {% if lock %}readonly{% endif %} class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary {% if lock %}{{ ro }}{% endif %}">{% if c %}{{ c.corporation_address or '' }}{% elif p.corporation_address %}{{ p.corporation_address }}{% endif %}</textarea>
       </div>
     </div>
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -111,16 +124,16 @@
     <h2 class="flex items-center gap-2 text-lg font-bold text-primary"><span class="material-symbols-outlined">construction</span> Project (Form 1)</h2>
     <div class="space-y-2">
       <label class="block text-sm font-semibold text-on-surface-variant">Project type / title *</label>
-      <input name="project_title" required value="{{ c.project_title if c else (p.project_title or '') }}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      <input name="project_title" required value="{{ c.project_title if c else (p.project_title or '') }}" {% if lock %}readonly{% endif %} class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary {% if lock %}{{ ro }}{% endif %}" />
     </div>
     <div class="space-y-2">
       <label class="block text-sm font-semibold text-on-surface-variant">Project location</label>
-      <textarea name="project_location" rows="2" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary">{% if c %}{{ c.project_location or '' }}{% elif p.project_location %}{{ p.project_location }}{% endif %}</textarea>
+      <textarea name="project_location" rows="2" {% if lock %}readonly{% endif %} class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary {% if lock %}{{ ro }}{% endif %}">{% if c %}{{ c.project_location or '' }}{% elif p.project_location %}{{ p.project_location }}{% endif %}</textarea>
     </div>
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <div class="space-y-2">
         <label class="block text-sm font-semibold text-on-surface-variant">Lot area (sq.m.)</label>
-        <input name="lot_area_sqm" value="{% if c and c.lot_area_sqm is not none %}{{ c.lot_area_sqm }}{% elif p.lot_area_sqm is defined and p.lot_area_sqm is not none %}{{ p.lot_area_sqm }}{% endif %}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+        <input name="lot_area_sqm" value="{% if c and c.lot_area_sqm is not none %}{{ c.lot_area_sqm }}{% elif p.lot_area_sqm is defined and p.lot_area_sqm is not none %}{{ p.lot_area_sqm }}{% endif %}" {% if lock %}readonly{% endif %} class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary {% if lock %}{{ ro }}{% endif %}" />
       </div>
       <div class="space-y-2">
         <label class="block text-sm font-semibold text-on-surface-variant">Building area (sq.m.)</label>
@@ -175,7 +188,7 @@
     </div>
     <div class="space-y-2">
       <label class="block text-sm font-semibold text-on-surface-variant">Project cost (figures)</label>
-      <input name="project_cost_amount" value="{% if c and c.project_cost_amount is not none %}{{ c.project_cost_amount }}{% elif p.project_cost_amount is defined and p.project_cost_amount is not none %}{{ p.project_cost_amount }}{% endif %}" class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary" />
+      <input name="project_cost_amount" value="{% if c and c.project_cost_amount is not none %}{{ c.project_cost_amount }}{% elif p.project_cost_amount is defined and p.project_cost_amount is not none %}{{ p.project_cost_amount }}{% endif %}" {% if lock %}readonly{% endif %} class="w-full rounded-lg border-none bg-surface-container-low px-4 py-3 text-on-surface outline-none focus:ring-2 focus:ring-primary {% if lock %}{{ ro }}{% endif %}" />
     </div>
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
       <div class="space-y-2">
@@ -305,6 +318,7 @@
   </div>
 </form>
 
+{% if not lock %}
 <script>
 (function () {
   const input = document.getElementById("applicant-search-input");
@@ -368,4 +382,5 @@
   });
 })();
 </script>
+{% endif %}
 {% endblock %}

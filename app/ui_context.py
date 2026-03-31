@@ -45,7 +45,6 @@ def merge_shell(
         "project_title": "ZoningPro",
         "project_subtitle": "Locational clearance",
         "app_id": None,
-        "show_finalize_cta": False,
         "navbar_export_href": "/export/applications.xlsx",
         "mobile_fees_href": "/",
         "current_user": current_user,
@@ -61,7 +60,6 @@ def shell_for_application(
     *,
     nav_active: str,
     sidebar_active: str,
-    show_finalize_cta: bool = False,
     current_user: "User | None" = None,
     db: Session | None = None,
 ) -> dict[str, Any]:
@@ -82,6 +80,5 @@ def shell_for_application(
         project_title=title,
         project_subtitle=subtitle,
         app_id=row.id,
-        show_finalize_cta=show_finalize_cta,
         mobile_fees_href=f"/applications/{row.id}/assessment",
     )

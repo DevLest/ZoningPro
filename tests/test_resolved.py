@@ -38,6 +38,27 @@ def test_surcharge_override():
     _base, disp = display_fees_for_application(row)
     assert disp.surcharge == 99.5
     assert disp.surcharge_overridden is True
+    assert disp.surcharge_itemized is False
+
+
+def test_surcharge_itemized_json():
+    applicant = Applicant(first_name="A", last_name="T")
+    row = LCApplication(
+        lc_ctrl_no="T",
+        date_of_application=date.today(),
+        applicant=applicant,
+        address="X",
+        category="commercial",
+        template_id="commercial_100k",
+        project_cost=50_000.0,
+        surcharge_items='[{"name": "Line A", "price": 100.0}, {"name": "Line B", "price": 50.5}]',
+    )
+    _base, disp = display_fees_for_application(row)
+    assert disp.surcharge == 150.5
+    assert disp.surcharge_itemized is True
+    assert disp.surcharge_overridden is True
+    assert len(disp.surcharge_lines) == 2
+    assert disp.surcharge_lines[0]["name"] == "Line A"
 
 
 def test_lc_fee_override():

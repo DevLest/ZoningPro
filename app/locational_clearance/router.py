@@ -24,6 +24,41 @@ templates = Jinja2Templates(directory=str(PROJECT_ROOT / "app" / "templates"))
 router = APIRouter(prefix="/locational-clearance", tags=["locational_clearance"])
 
 
+def lc_application_allows_lc_prefill(lc_status: str | None) -> bool:
+    """Locational clearance prefill from a fee application is allowed once LC status is Paid."""
+    return (lc_status or "").strip().casefold() == "paid"
+
+
+def lc_case_locked_to_paid_fee_application(db: Session, lc_application_id: int | None) -> bool:
+    if lc_application_id is None:
+        return False
+    la = db.get(LCApplication, lc_application_id)
+    return la is not None and lc_application_allows_lc_prefill(la.lc_status)
+
+
+def _locked_form_strings_from_fee_la(la: LCApplication) -> dict[str, str]:
+    """Canonical string values from the fee application; used when the LC case is locked to a paid fee app."""
+    ap = la.applicant
+    if ap is None:
+        raise ValueError("Fee application has no applicant record.")
+    return {
+        "application_number": la.lc_ctrl_no,
+        "date_of_receipt": la.date_of_application.isoformat() if la.date_of_application else "",
+        "or_date": la.date_granted.isoformat() if la.date_granted else "",
+        "amount_paid": str(la.total) if la.total is not None else "",
+        "applicant_address": la.address,
+        "corporation_address": la.address,
+        "project_title": (la.project_name or "").strip(),
+        "project_location": (la.project_location or "").strip(),
+        "lot_area_sqm": str(la.lot_area_sqm) if la.lot_area_sqm is not None else "",
+        "project_cost_amount": str(la.project_cost) if la.project_cost is not None else "",
+        "applicant_first_name": ap.first_name or "",
+        "applicant_last_name": ap.last_name or "",
+        "applicant_middle_name": ap.middle_name or "",
+        "applicant_suffix": ap.suffix or "",
+    }
+
+
 def _parse_date(s: str | None) -> date | None:
     if not s or not str(s).strip():
         return None
@@ -181,6 +216,7 @@ def _prefill_from_lc_application(db: Session, lc_id: int) -> dict:
         "project_location": (la.project_location or "").strip(),
         "lot_area_sqm": la.lot_area_sqm,
         "project_cost_amount": la.project_cost,
+        "amount_paid": la.total,
         "application_number": la.lc_ctrl_no,
         "date_of_receipt": la.date_of_application.isoformat() if la.date_of_application else "",
         "or_date": la.date_granted.isoformat() if la.date_granted else "",
@@ -200,6 +236,14 @@ def lc_new_get(
     prefill: dict = {}
     prefill_lc_application_id: int | None = None
     if lc_application is not None:
+        la = db.get(LCApplication, lc_application)
+        if not la:
+            raise HTTPException(status_code=404)
+        if not lc_application_allows_lc_prefill(la.lc_status):
+            return RedirectResponse(
+                url=f"/applications/{lc_application}/assessment?lc_forms=locked",
+                status_code=303,
+            )
         prefill = _prefill_from_lc_application(db, lc_application)
         if prefill.get("reuse_applicant"):
             reuse_applicant = prefill["reuse_applicant"]
@@ -217,6 +261,7 @@ def lc_new_get(
                 "prefill": prefill,
                 "prefill_lc_application_id": prefill_lc_application_id,
                 "prefill_existing_applicant_id": prefill_existing_applicant_id,
+                "lc_fee_app_fields_locked": prefill_lc_application_id is not None,
             },
             current_user=user,
             db=db,
@@ -281,23 +326,62 @@ def lc_new_post(
     cert_place: str = Form(""),
     additional_conditions: str = Form(""),
 ):
-    try:
-        ap = resolve_applicant_for_intake(
-            db,
-            existing_applicant_id=existing_applicant_id,
-            first_name=applicant_first_name,
-            last_name=applicant_last_name,
-            middle_name=applicant_middle_name,
-            suffix=applicant_suffix,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
     la_id: int | None = None
+    la_row: LCApplication | None = None
     t = (lc_application_id or "").strip()
     if t.isdigit():
         la_id = int(t)
-        if db.get(LCApplication, la_id) is None:
+        la_row = (
+            db.scalars(
+                select(LCApplication)
+                .where(LCApplication.id == la_id)
+                .options(joinedload(LCApplication.applicant))
+            )
+            .unique()
+            .first()
+        )
+        if la_row is None:
             la_id = None
+        elif not lc_application_allows_lc_prefill(la_row.lc_status):
+            raise HTTPException(
+                status_code=400,
+                detail="Fee application must have LC status Paid before linking to an LC case.",
+            )
+    locked = la_id is not None and la_row is not None
+    if locked:
+        try:
+            fix = _locked_form_strings_from_fee_la(la_row)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        application_number = fix["application_number"]
+        date_of_receipt = fix["date_of_receipt"]
+        or_date = fix["or_date"]
+        amount_paid = fix["amount_paid"]
+        applicant_address = fix["applicant_address"]
+        corporation_address = fix["corporation_address"]
+        project_title = fix["project_title"]
+        project_location = fix["project_location"]
+        lot_area_sqm = fix["lot_area_sqm"]
+        project_cost_amount = fix["project_cost_amount"]
+        applicant_first_name = fix["applicant_first_name"]
+        applicant_last_name = fix["applicant_last_name"]
+        applicant_middle_name = fix["applicant_middle_name"]
+        applicant_suffix = fix["applicant_suffix"]
+        ap = la_row.applicant
+        if ap is None:
+            raise HTTPException(status_code=400, detail="Fee application has no applicant record.")
+    else:
+        try:
+            ap = resolve_applicant_for_intake(
+                db,
+                existing_applicant_id=existing_applicant_id,
+                first_name=applicant_first_name,
+                last_name=applicant_last_name,
+                middle_name=applicant_middle_name,
+                suffix=applicant_suffix,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     row = LocationalClearanceCase(applicant_id=ap.id, lc_application_id=la_id)
     _apply_form_to_case(
         row,
@@ -371,6 +455,7 @@ def lc_detail_get(
     )
     if not row:
         raise HTTPException(status_code=404)
+    fee_locked = lc_case_locked_to_paid_fee_application(db, row.lc_application_id)
     return templates.TemplateResponse(
         request,
         "locational_clearance/form.html",
@@ -383,6 +468,7 @@ def lc_detail_get(
                 "prefill": {},
                 "prefill_lc_application_id": row.lc_application_id,
                 "prefill_existing_applicant_id": str(row.applicant_id),
+                "lc_fee_app_fields_locked": fee_locked,
             },
             current_user=user,
             db=db,
@@ -451,20 +537,64 @@ def lc_detail_post(
     row = db.get(LocationalClearanceCase, case_id)
     if not row:
         raise HTTPException(status_code=404)
-    try:
-        ap = resolve_applicant_for_intake(
-            db,
-            existing_applicant_id=existing_applicant_id,
-            first_name=applicant_first_name,
-            last_name=applicant_last_name,
-            middle_name=applicant_middle_name,
-            suffix=applicant_suffix,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    row.applicant_id = ap.id
     t = (lc_application_id or "").strip()
-    row.lc_application_id = int(t) if t.isdigit() and db.get(LCApplication, int(t)) else None
+    new_la_id: int | None = int(t) if t.isdigit() else None
+    la_row: LCApplication | None = None
+    if new_la_id is not None:
+        la_row = (
+            db.scalars(
+                select(LCApplication)
+                .where(LCApplication.id == new_la_id)
+                .options(joinedload(LCApplication.applicant))
+            )
+            .unique()
+            .first()
+        )
+        if la_row is None:
+            new_la_id = None
+        elif not lc_application_allows_lc_prefill(la_row.lc_status):
+            raise HTTPException(
+                status_code=400,
+                detail="Fee application must have LC status Paid before linking to an LC case.",
+            )
+    locked = new_la_id is not None and la_row is not None
+    if locked:
+        try:
+            fix = _locked_form_strings_from_fee_la(la_row)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        application_number = fix["application_number"]
+        date_of_receipt = fix["date_of_receipt"]
+        or_date = fix["or_date"]
+        amount_paid = fix["amount_paid"]
+        applicant_address = fix["applicant_address"]
+        corporation_address = fix["corporation_address"]
+        project_title = fix["project_title"]
+        project_location = fix["project_location"]
+        lot_area_sqm = fix["lot_area_sqm"]
+        project_cost_amount = fix["project_cost_amount"]
+        applicant_first_name = fix["applicant_first_name"]
+        applicant_last_name = fix["applicant_last_name"]
+        applicant_middle_name = fix["applicant_middle_name"]
+        applicant_suffix = fix["applicant_suffix"]
+        ap = la_row.applicant
+        if ap is None:
+            raise HTTPException(status_code=400, detail="Fee application has no applicant record.")
+        row.applicant_id = ap.id
+    else:
+        try:
+            ap = resolve_applicant_for_intake(
+                db,
+                existing_applicant_id=existing_applicant_id,
+                first_name=applicant_first_name,
+                last_name=applicant_last_name,
+                middle_name=applicant_middle_name,
+                suffix=applicant_suffix,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        row.applicant_id = ap.id
+    row.lc_application_id = new_la_id
     _apply_form_to_case(
         row,
         application_number=application_number,

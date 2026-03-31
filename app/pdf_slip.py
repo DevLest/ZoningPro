@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -35,6 +35,8 @@ def build_assessment_pdf(
     surcharge: float,
     zoning: float,
     total: float,
+    surcharge_lines: list[dict[str, Any]] | None = None,
+    surcharge_itemized: bool = False,
     zoning_waived: bool = False,
     branding: dict[str, str] | None = None,
     copy_kind: Literal["owner", "file"] = "owner",
@@ -105,6 +107,7 @@ def build_assessment_pdf(
 
     zoning_txt = "0.00 (waived)" if zoning_waived else format_peso_plain(zoning)
     copy_banner = "OWNER'S COPY" if copy_kind == "owner" else "FILE COPY"
+    lines = list(surcharge_lines) if surcharge_lines else []
 
     inner = [
         [
@@ -145,29 +148,58 @@ def build_assessment_pdf(
         [cell("<b>ASSESSMENT</b>", tiny_center_b), "", "", ""],
         [cell("<b>FEES:</b>", tiny_b), "", "", ""],
         [cell("&nbsp;&nbsp;&nbsp;&nbsp;LC Fee:", tiny), "", Paragraph(format_peso_plain(lc_fee), tiny_right), ""],
-        [cell("&nbsp;&nbsp;&nbsp;&nbsp;Surcharge:", tiny), "", Paragraph(format_peso_plain(surcharge) if surcharge else "—", tiny_right), ""],
-        [
-            cell("&nbsp;&nbsp;&nbsp;&nbsp;Zoning Certification:", tiny),
-            "",
-            Paragraph(zoning_txt, tiny_right),
-            "",
-        ],
-        [
-            cell("<b>Total Assessment:</b>", tiny_b),
-            "",
-            Table(
-                [
-                    [
-                        Paragraph("", tiny),
-                        Paragraph("<b>P</b>", ParagraphStyle("t1", parent=tiny_center_b, fontSize=9)),
-                        Paragraph(f"<b>{format_peso_plain(total)}</b>", ParagraphStyle("t2", parent=tiny_right_b, fontSize=9)),
-                    ]
-                ],
-                colWidths=[2.4 * inch, 0.35 * inch, 1.1 * inch],
-            ),
-            "",
-        ],
     ]
+
+    if lines:
+        total_sur = sum(float(sl.get("price") or 0) for sl in lines)
+        if surcharge_itemized:
+            sub_lines = []
+            for sl in lines:
+                nm = str(sl.get("name") or "—").replace("&", "&amp;")
+                pr = format_peso_plain(float(sl.get("price") or 0))
+                sub_lines.append(
+                    f'<font size="7" color="#555555">{nm}</font>&nbsp;&nbsp;'
+                    f'<font size="7">{pr}</font>'
+                )
+            label_html = "&nbsp;&nbsp;&nbsp;&nbsp;<b>Surcharge</b><br/>" + "<br/>".join(sub_lines)
+        else:
+            label_html = (
+                "&nbsp;&nbsp;&nbsp;&nbsp;<b>Surcharge</b><br/>"
+                '<font size="7" color="#555555">Per template rules</font>'
+            )
+        inner.append(
+            [cell(label_html, tiny), "", Paragraph(format_peso_plain(total_sur), tiny_right), ""]
+        )
+    else:
+        inner.append(
+            [cell("&nbsp;&nbsp;&nbsp;&nbsp;Surcharge:", tiny), "", Paragraph("—", tiny_right), ""]
+        )
+
+    inner.extend(
+        [
+            [
+                cell("&nbsp;&nbsp;&nbsp;&nbsp;Zoning Certification:", tiny),
+                "",
+                Paragraph(zoning_txt, tiny_right),
+                "",
+            ],
+            [
+                cell("<b>Total Assessment:</b>", tiny_b),
+                "",
+                Table(
+                    [
+                        [
+                            Paragraph("", tiny),
+                            Paragraph("<b>P</b>", ParagraphStyle("t1", parent=tiny_center_b, fontSize=9)),
+                            Paragraph(f"<b>{format_peso_plain(total)}</b>", ParagraphStyle("t2", parent=tiny_right_b, fontSize=9)),
+                        ]
+                    ],
+                    colWidths=[2.4 * inch, 0.35 * inch, 1.1 * inch],
+                ),
+                "",
+            ],
+        ]
+    )
 
     sig_left = Paragraph("<b>Assessed:</b><br/><br/><br/>_________________________", tiny)
     sig_name = (b.get("signatory_name") or "").replace("&", "&amp;")
@@ -177,6 +209,14 @@ def build_assessment_pdf(
         ParagraphStyle("sig", parent=tiny, alignment=1, fontSize=8),
     )
     inner.append([sig_left, "", sig_right, ""])
+
+    n_rows = len(inner)
+    sig_row = n_rows - 1
+    # One inner table row for all surcharge lines (grouped under a single "Surcharge" label).
+    n_sur = 1
+    last_fee_row = 15 + n_sur
+
+    fee_span_ops = [("SPAN", (2, r), (3, r)) for r in range(13, last_fee_row + 1)]
 
     # Merge columns for wide rows: use a simpler 4-col table
     t_inner = Table(
@@ -199,13 +239,10 @@ def build_assessment_pdf(
                 ("SPAN", (1, 10), (3, 10)),
                 ("SPAN", (0, 11), (3, 11)),
                 ("SPAN", (0, 12), (3, 12)),
-                ("SPAN", (2, 13), (3, 13)),
-                ("SPAN", (2, 14), (3, 14)),
-                ("SPAN", (2, 15), (3, 15)),
-                ("SPAN", (2, 16), (3, 16)),
+                *fee_span_ops,
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("SPAN", (0, 17), (1, 17)),
-                ("SPAN", (2, 17), (3, 17)),
+                ("SPAN", (0, sig_row), (1, sig_row)),
+                ("SPAN", (2, sig_row), (3, sig_row)),
             ]
         )
     )
@@ -219,10 +256,20 @@ def build_assessment_pdf(
             ParagraphStyle("sf", parent=tiny, alignment=2, fontSize=7, leading=9),
         )
     elif surcharge and surcharge > 0:
-        sur_footer = Paragraph(
-            f"<b>Surcharge detail</b><br/><b>TOTAL: P {format_peso_plain(surcharge)}</b>",
-            ParagraphStyle("sf2", parent=tiny, alignment=2, fontSize=7, leading=9),
-        )
+        if surcharge_itemized and lines:
+            detail = "<br/>".join(
+                f"{str(sl.get('name') or '').replace('&', '&amp;')}: P {format_peso_plain(float(sl.get('price') or 0))}"
+                for sl in lines
+            )
+            sur_footer = Paragraph(
+                f"<b>Surcharge detail</b><br/>{detail}<br/><br/><b>TOTAL: P {format_peso_plain(surcharge)}</b>",
+                ParagraphStyle("sf2", parent=tiny, alignment=2, fontSize=7, leading=9),
+            )
+        else:
+            sur_footer = Paragraph(
+                f"<b>Surcharge detail</b><br/><b>TOTAL: P {format_peso_plain(surcharge)}</b>",
+                ParagraphStyle("sf2", parent=tiny, alignment=2, fontSize=7, leading=9),
+            )
     else:
         sur_footer = Paragraph("", tiny)
 

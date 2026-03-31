@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 from starlette.middleware.sessions import SessionMiddleware
@@ -44,6 +44,7 @@ from app.applicant_service import (
 from app.permission_defs import MODULES, MODULE_KEYS, ROLE_ADMIN, ROLE_STAFF
 from app.pdf_slip import build_assessment_pdf
 from app.resolved_fees import DisplayFees, display_fees_for_application
+from app.surcharge_items import normalize_surcharge_items_from_api
 from app.seeds import run_all_seeds
 from app.settings_store import (
     PRINT_PROFILE_LC,
@@ -55,6 +56,7 @@ from app.settings_store import (
 )
 from app.ui_context import merge_shell, shell_for_application
 from app.locational_clearance import router as locational_clearance_router
+from app.locational_clearance.router import lc_application_allows_lc_prefill
 
 PROJECT_TYPE_DISPLAY = {
     "residential": "RESIDENTIAL",
@@ -74,6 +76,7 @@ LC_STATUS_OPTIONS: list[tuple[str, str]] = [
     ("Under review", "Under review"),
     ("Approved", "Approved"),
     ("Granted", "Granted"),
+    ("Paid", "Paid"),
     ("Denied", "Denied"),
     ("Cancelled", "Cancelled"),
 ]
@@ -89,13 +92,32 @@ def _normalize_lc_status(raw: str | None) -> str | None:
 templates = Jinja2Templates(directory=str(PROJECT_ROOT / "app" / "templates"))
 
 
+class SurchargeLineIn(BaseModel):
+    name: str = ""
+    price: float = 0.0
+
+
 class AssessmentSyncIn(BaseModel):
     lc_status: str | None = None
     date_granted: str | None = None
     optional_units: str | None = None
-    surcharge_amount: str | None = None
+    surcharge_items: list[SurchargeLineIn] = Field(default_factory=list)
     waive_zoning_cert: bool = False
     lc_fee_amount: str | None = None
+
+
+class ApplicantSnapshotIn(BaseModel):
+    """Applicant name + application fields shown on the assessment snapshot card."""
+
+    first_name: str = ""
+    last_name: str
+    middle_name: str | None = None
+    suffix: str | None = None
+    address: str
+    project_cost: float = Field(ge=0)
+    category: str
+    template_id: str
+    lot_area_sqm: str | None = None
 
 
 @asynccontextmanager
@@ -525,20 +547,6 @@ def _sanitize_lat_lon(lat: float | None, lon: float | None) -> tuple[float | Non
     return lat, lon
 
 
-def _parse_surcharge_override(raw: str, computed_surcharge: float) -> float | None:
-    """Empty or same-as-computed clears manual override (use formula)."""
-    s = (raw or "").strip()
-    if not s:
-        return None
-    try:
-        v = float(s)
-    except ValueError:
-        return None
-    if abs(v - computed_surcharge) < 0.005:
-        return None
-    return v
-
-
 def _parse_lc_fee_override(raw: str | None, computed_lc: float) -> float | None:
     """Empty or same-as-computed clears manual override (use formula)."""
     s = (raw or "").strip()
@@ -565,6 +573,9 @@ def _display_fees_dict(d: DisplayFees) -> dict[str, Any]:
         "surcharge_overridden": d.surcharge_overridden,
         "lc_fee_overridden": d.lc_fee_overridden,
         "zoning_waived": d.zoning_waived,
+        "surcharge_itemized": d.surcharge_itemized,
+        "surcharge_lines": [{"name": x["name"], "price": x["price"]} for x in d.surcharge_lines],
+        "surcharge_items": [{"name": x["name"], "price": x["price"]} for x in d.surcharge_items],
     }
 
 
@@ -574,7 +585,7 @@ def _apply_assessment_inputs(
     lc_status: str | None,
     date_granted: str | None,
     optional_units: str | None,
-    surcharge_amount: str | None,
+    surcharge_items: list[SurchargeLineIn] | None,
     waive_zoning_cert: bool,
     lc_fee_amount: str | None,
     db: Session,
@@ -589,7 +600,9 @@ def _apply_assessment_inputs(
         lot_area_sqm=row.lot_area_sqm,
         optional_units=row.optional_units,
     )
-    row.surcharge_override = _parse_surcharge_override(surcharge_amount or "", base.surcharge)
+    if surcharge_items is not None:
+        row.surcharge_items = normalize_surcharge_items_from_api([s.model_dump() for s in surcharge_items])
+        row.surcharge_override = None
     row.lc_fee_override = _parse_lc_fee_override(lc_fee_amount, base.lc_fee)
     row.waive_zoning_cert = waive_zoning_cert
     db.commit()
@@ -977,6 +990,54 @@ def classify_post(
     return RedirectResponse(url=f"/applications/{app_id}/assessment", status_code=303)
 
 
+@app.patch("/api/applications/{app_id}/applicant-snapshot")
+def applicant_snapshot_patch(
+    app_id: int,
+    body: ApplicantSnapshotIn,
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_applications_write),
+):
+    row = db.scalars(
+        select(LCApplication)
+        .where(LCApplication.id == app_id)
+        .options(joinedload(LCApplication.applicant))
+    ).first()
+    if not row:
+        raise HTTPException(404)
+    if not row.template_id or row.project_cost is None:
+        raise HTTPException(400, "Application must be classified first.")
+    ap = row.applicant
+    if not ap:
+        raise HTTPException(400, "Application has no applicant record.")
+
+    last = body.last_name.strip()
+    if not last:
+        raise HTTPException(status_code=422, detail="Last name is required.")
+
+    try:
+        tmeta = get_template(body.template_id.strip())
+    except KeyError:
+        raise HTTPException(400, "Invalid assessment template.") from None
+    cat = body.category.strip()
+    if tmeta.category != cat:
+        raise HTTPException(400, "Category does not match the selected template.")
+
+    ap.first_name = (body.first_name or "").strip()
+    ap.last_name = last
+    ap.middle_name = (body.middle_name or "").strip() or None
+    ap.suffix = (body.suffix or "").strip() or None
+
+    row.address = (body.address or "").strip()
+    row.project_cost = float(body.project_cost)
+    row.category = cat
+    row.template_id = body.template_id.strip()
+    la = (body.lot_area_sqm or "").strip()
+    row.lot_area_sqm = float(la) if la else None
+
+    db.commit()
+    return {"ok": True}
+
+
 @app.get("/applications/{app_id}/assessment", response_class=HTMLResponse)
 def assessment_get(
     request: Request,
@@ -984,7 +1045,11 @@ def assessment_get(
     db: Session = Depends(get_db),
     user: User = Depends(require_applications_read),
 ):
-    row = db.get(LCApplication, app_id)
+    row = db.scalars(
+        select(LCApplication)
+        .where(LCApplication.id == app_id)
+        .options(joinedload(LCApplication.applicant))
+    ).first()
     if not row:
         raise HTTPException(404)
     if not row.template_id or row.project_cost is None:
@@ -993,11 +1058,17 @@ def assessment_get(
     base, display = display_fees_for_application(row)
     meta = get_template(row.template_id)
     ptype = PROJECT_TYPE_DISPLAY.get(row.category or "", "—")
+    cat_labels = dict(list_categories())
+    grouped: dict[str, list[Any]] = {}
+    for t in TEMPLATE_REGISTRY:
+        grouped.setdefault(t.category, []).append(t)
+    suggested = None
+    if row.category and row.project_cost is not None:
+        suggested = suggest_template(row.category, row.project_cost)
     ctx = shell_for_application(
         row,
         nav_active="estimations",
         sidebar_active="fee_calculator",
-        show_finalize_cta=True,
         current_user=user,
         db=db,
     )
@@ -1011,6 +1082,11 @@ def assessment_get(
             "lc_status_options": LC_STATUS_OPTIONS,
             "lc_status_known": LC_STATUS_KNOWN,
             "fee_display_json": json.dumps(_display_fees_dict(display)),
+            "lc_forms_from_application_enabled": lc_application_allows_lc_prefill(row.lc_status),
+            "categories": list_categories(),
+            "templates_grouped": grouped,
+            "cat_labels": cat_labels,
+            "snapshot_suggested_template": suggested,
         }
     )
     return templates.TemplateResponse(request, "assessment.html", ctx)
@@ -1033,7 +1109,7 @@ def assessment_sync(
         lc_status=body.lc_status,
         date_granted=body.date_granted,
         optional_units=body.optional_units,
-        surcharge_amount=body.surcharge_amount,
+        surcharge_items=body.surcharge_items,
         waive_zoning_cert=body.waive_zoning_cert,
         lc_fee_amount=body.lc_fee_amount,
         db=db,
@@ -1045,7 +1121,7 @@ def assessment_sync(
 def assessment_post(
     app_id: int,
     optional_units: str = Form(""),
-    surcharge_amount: str = Form(""),
+    surcharge_items_json: str = Form(""),
     waive_zoning_cert: str | None = Form(None),
     lc_status: str = Form(""),
     date_granted: str = Form(""),
@@ -1058,12 +1134,31 @@ def assessment_post(
         raise HTTPException(404)
     if not row.template_id or row.project_cost is None:
         raise HTTPException(400)
+    sur_items: list[SurchargeLineIn] = []
+    raw = (surcharge_items_json or "").strip()
+    if raw:
+        try:
+            arr = json.loads(raw)
+            if isinstance(arr, list):
+                sur_items = []
+                for x in arr:
+                    if not isinstance(x, dict):
+                        continue
+                    sur_items.append(
+                        SurchargeLineIn(name=str(x.get("name") or ""), price=float(x.get("price") or 0))
+                    )
+            else:
+                sur_items = []
+        except (json.JSONDecodeError, TypeError, ValueError):
+            sur_items = []
+    else:
+        sur_items = []
     _apply_assessment_inputs(
         row,
         lc_status=lc_status,
         date_granted=date_granted,
         optional_units=optional_units,
-        surcharge_amount=surcharge_amount,
+        surcharge_items=sur_items,
         waive_zoning_cert=waive_zoning_cert in ("1", "on", "true", "yes"),
         lc_fee_amount=lc_fee_amount,
         db=db,
@@ -1154,6 +1249,8 @@ def download_pdf(
         surcharge=display.surcharge,
         zoning=display.zoning_cert,
         total=display.total,
+        surcharge_lines=list(display.surcharge_lines),
+        surcharge_itemized=display.surcharge_itemized,
         zoning_waived=display.zoning_waived,
         branding=get_print_profile(PRINT_PROFILE_LC),
         copy_kind=copy,

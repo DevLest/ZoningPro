@@ -114,10 +114,31 @@
             <td class="slip-cell px-2 py-1 pl-4" colspan="5">LC Fee:</td>
             <td class="slip-cell px-2 py-1 text-right font-mono tabular-nums" colspan="3">{{ "%.2f"|format(display.lc_fee) }}</td>
           </tr>
+          {% if display.surcharge_lines %}
+          <tr>
+            <td class="slip-cell align-top px-2 py-1 pl-4" colspan="5">
+              <p class="font-bold">Surcharge</p>
+              {% if display.surcharge_itemized %}
+              <div class="mt-1 space-y-0.5 pl-2">
+                {% for line in display.surcharge_lines %}
+                <div class="flex justify-between gap-2 text-[10px] leading-tight">
+                  <span>{{ line.name }}</span>
+                  <span class="font-mono tabular-nums">{{ "%.2f"|format(line.price) }}</span>
+                </div>
+                {% endfor %}
+              </div>
+              {% else %}
+              <p class="mt-0.5 pl-2 text-[10px] text-slate-600">Per template rules</p>
+              {% endif %}
+            </td>
+            <td class="slip-cell px-2 py-1 text-right font-mono tabular-nums align-top" colspan="3">{{ "%.2f"|format(display.surcharge) }}</td>
+          </tr>
+          {% else %}
           <tr>
             <td class="slip-cell px-2 py-1 pl-4" colspan="5">Surcharge:</td>
-            <td class="slip-cell px-2 py-1 text-right font-mono tabular-nums" colspan="3">{% if display.surcharge %}{{ "%.2f"|format(display.surcharge) }}{% else %}—{% endif %}</td>
+            <td class="slip-cell px-2 py-1 text-right font-mono tabular-nums" colspan="3">—</td>
           </tr>
+          {% endif %}
           <tr>
             <td class="slip-cell px-2 py-1 pl-4" colspan="5">Zoning Certification:</td>
             <td class="slip-cell px-2 py-1 text-right font-mono tabular-nums" colspan="3">{% if display.zoning_waived %}0.00 <span class="text-slate-600">(waived)</span>{% else %}{{ "%.2f"|format(display.zoning_cert) }}{% endif %}</td>
@@ -153,6 +174,11 @@
             <p class="mt-1 border-t border-slate-800 pt-0.5 font-bold">TOTAL: <span class="font-mono">P 5,000.00</span></p>
             {% elif display.surcharge and display.surcharge > 0 %}
             <p class="font-semibold uppercase tracking-wide">Surcharge detail</p>
+            {% if display.surcharge_itemized %}
+            {% for line in display.surcharge_lines %}
+            <p class="text-[8px]">{{ line.name }}: <span class="font-mono">P {{ "%.2f"|format(line.price) }}</span></p>
+            {% endfor %}
+            {% endif %}
             <p class="mt-0.5 font-bold">TOTAL: <span class="font-mono">P {{ "%.2f"|format(display.surcharge) }}</span></p>
             {% endif %}
           </div>
