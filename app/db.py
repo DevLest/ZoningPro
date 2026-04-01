@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
-from app.config import DATA_DIR, DB_PATH
+from app.config import DATA_DIR, DATABASE_URL, DB_PATH
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -10,10 +10,18 @@ class Base(DeclarativeBase):
     pass
 
 
-engine = create_engine(
-    f"sqlite:///{DB_PATH}",
-    connect_args={"check_same_thread": False},
-)
+if DATABASE_URL:
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+    )
+else:
+    engine = create_engine(
+        f"sqlite:///{DB_PATH}",
+        connect_args={"check_same_thread": False},
+    )
+
+IS_SQLITE = engine.dialect.name == "sqlite"
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
@@ -27,6 +35,8 @@ def get_db():
 
 def _migrate_sqlite_schema() -> None:
     """Add columns introduced after first deploy (SQLite has no ALTER complexity for new cols)."""
+    if not IS_SQLITE:
+        return
     insp = inspect(engine)
     if not insp.has_table("lc_applications"):
         return

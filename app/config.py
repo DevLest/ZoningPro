@@ -8,6 +8,7 @@ SECRET_KEY = os.environ.get("ZONINGPRO_SECRET_KEY", "dev-zoningpro-secret-change
 DATA_DIR = PROJECT_ROOT / "data"
 EXPORTS_DIR = PROJECT_ROOT / "exports"
 DB_PATH = DATA_DIR / "zoning.db"
+DATABASE_URL = (os.environ.get("DATABASE_URL") or os.environ.get("ZONINGPRO_DATABASE_URL") or "").strip()
 
 MUNICIPALITY = "Municipality of Binalbagan"
 OFFICE = "MUNICIPAL PLANNING AND DEVELOPMENT OFFICE"
