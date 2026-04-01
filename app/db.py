@@ -1,4 +1,7 @@
+import socket
+
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 from app.config import DATA_DIR, DATABASE_URL, DB_PATH
@@ -8,6 +11,27 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 class Base(DeclarativeBase):
     pass
+
+
+def _resolve_ipv4_hostaddr(db_url: str) -> str | None:
+    """Resolve DB host to an IPv4 address when platform IPv6 routing is unavailable."""
+    try:
+        parsed = make_url(db_url)
+    except Exception:
+        return None
+    host = parsed.host
+    port = int(parsed.port or 5432)
+    if not host:
+        return None
+    try:
+        infos = socket.getaddrinfo(host, port, family=socket.AF_INET, type=socket.SOCK_STREAM)
+    except OSError:
+        return None
+    for info in infos:
+        addr = info[4][0]
+        if addr:
+            return addr
+    return None
 
 
 if DATABASE_URL:
@@ -21,9 +45,15 @@ if DATABASE_URL:
             normalized_database_url = normalized_database_url.replace(
                 "postgresql://", "postgresql+psycopg://", 1
             )
+    pg_connect_args = {}
+    if normalized_database_url.startswith("postgresql+psycopg://"):
+        hostaddr = _resolve_ipv4_hostaddr(normalized_database_url)
+        if hostaddr:
+            pg_connect_args["hostaddr"] = hostaddr
     engine = create_engine(
         normalized_database_url,
         pool_pre_ping=True,
+        connect_args=pg_connect_args,
     )
 else:
     engine = create_engine(
