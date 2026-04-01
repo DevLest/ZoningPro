@@ -12,8 +12,15 @@ class Base(DeclarativeBase):
 
 if DATABASE_URL:
     normalized_database_url = DATABASE_URL
-    if normalized_database_url.startswith("postgresql://") and "+psycopg" not in normalized_database_url:
-        normalized_database_url = normalized_database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    if "+psycopg" not in normalized_database_url:
+        if normalized_database_url.startswith("postgres://"):
+            normalized_database_url = normalized_database_url.replace(
+                "postgres://", "postgresql+psycopg://", 1
+            )
+        elif normalized_database_url.startswith("postgresql://"):
+            normalized_database_url = normalized_database_url.replace(
+                "postgresql://", "postgresql+psycopg://", 1
+            )
     engine = create_engine(
         normalized_database_url,
         pool_pre_ping=True,
