@@ -51,7 +51,7 @@ def compute_fees(
     if template_id == "residential_100k":
         lc = round(cost * 0.0011, 2)
         sur = 0.0
-        zc = 500.0
+        zc = zcp
         b["note"] = "LC fee ≈ 0.11% of project cost (from workbook sample)"
 
     elif template_id == "residential_100k_plus":
@@ -80,13 +80,13 @@ def compute_fees(
     elif template_id == "apartment_500k":
         lc = 2160.0
         sur = units * 0.01
-        zc = 500.0
+        zc = zcp
         b["optional_units"] = units
 
     elif template_id == "apartment_500k_plus":
         lc = 2160.0
         sur = 0.0
-        zc = 500.0
+        zc = zcp
 
     elif template_id == "apartment_2m_plus":
         k17, k18, k19 = _excess_chain(cost, 2_000_000.0)
@@ -98,7 +98,7 @@ def compute_fees(
     elif template_id == "dormitory_2m":
         lc = 2160.0
         sur = 0.0
-        zc = 300.0
+        zc = zcp
 
     elif template_id == "dormitory_2m_plus":
         k17, k18, k19 = _excess_chain(cost, 2_000_000.0)
@@ -110,12 +110,12 @@ def compute_fees(
     elif template_id == "commercial_100k":
         lc = 1440.0
         sur = 0.0
-        zc = 500.0
+        zc = zcp
 
     elif template_id == "commercial_100k_plus":
         lc = 2160.0
         sur = 0.0
-        zc = 500.0
+        zc = zcp
 
     elif template_id == "commercial_500k_plus":
         lc = 2880.0
@@ -131,7 +131,7 @@ def compute_fees(
         k17, k18, k19 = _excess_chain(cost, 2_000_000.0)
         lc = k19 + 7200.0
         sur = 0.0
-        zc = 500.0
+        zc = zcp
         b.update({"k17": k17, "k18": k18, "k19": k19})
 
     elif template_id == "institutional_2m":
@@ -149,7 +149,7 @@ def compute_fees(
     elif template_id == "special_use_2m":
         lc = 7200.0
         sur = 0.0
-        zc = 500.0
+        zc = zcp
 
     elif template_id == "special_use_2m_plus":
         lc = 7200.0 + (cost * 0.001)

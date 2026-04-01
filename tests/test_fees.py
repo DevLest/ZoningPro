@@ -50,7 +50,7 @@ def test_commercial_2m_plus():
     k17 = max(0.0, cost - 2_000_000.0)
     assert k17 == 0.0
     assert r.lc_fee == 7200.0
-    assert r.zoning_cert == 500.0
+    assert r.zoning_cert == DEFAULT_ZONING_CERTIFICATION_PRICE
 
 
 def test_commercial_2m_plus_with_excess():
